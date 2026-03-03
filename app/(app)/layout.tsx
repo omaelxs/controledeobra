@@ -136,7 +136,24 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
     if (!loading && !user) router.push("/login");
   }, [user, loading, router]);
 
-  if (loading || !user) return null;
+  // Timeout: se auth não resolver em 5s, redireciona para login
+  useEffect(() => {
+    if (!loading) return;
+    const timer = setTimeout(() => {
+      if (!user) router.push("/login");
+    }, 5000);
+    return () => clearTimeout(timer);
+  }, [loading, user, router]);
+
+  if (loading || !user) return (
+    <div style={{ minHeight: "100vh", background: "var(--bg)", display: "flex", alignItems: "center", justifyContent: "center" }}>
+      <div style={{ textAlign: "center" }}>
+        <div style={{ width: 40, height: 40, border: "3px solid var(--red-accent)", borderTopColor: "transparent", borderRadius: "50%", animation: "spin 0.8s linear infinite", margin: "0 auto 16px" }} />
+        <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: ".2em", textTransform: "uppercase", color: "rgba(255,255,255,.3)" }}>Carregando...</div>
+      </div>
+      <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
+    </div>
+  );
 
   const displayName = userDoc?.displayName ?? user.email?.split("@")[0] ?? "?";
   const initials = displayName.slice(0, 2).toUpperCase();
