@@ -7,6 +7,7 @@ import { UserDoc, UserRole } from "@/types/user";
 import { useToast } from "@/context/ToastContext";
 import { createLog } from "@/services/logs.service";
 import { useAuth } from "@/context/AuthContext";
+import { useUserRole } from "@/hooks/useUserRole";
 import PageTransition from "@/components/PageTransition";
 import { SkeletonCard } from "@/components/Skeleton";
 
@@ -15,6 +16,7 @@ const ROLE_OPTIONS: UserRole[] = ["admin", "dev", "user"];
 
 export default function AdminUsersPage() {
   const { user } = useAuth();
+  const { role } = useUserRole();
   const { addToast } = useToast();
   const [users, setUsers] = useState<UserDoc[]>([]);
   const [loading, setLoading] = useState(true);
@@ -26,7 +28,7 @@ export default function AdminUsersPage() {
   async function handleRoleChange(target: UserDoc, newRole: UserRole) {
     if (!user) return;
     try {
-      await changeUserRole(target.uid, newRole);
+      await changeUserRole(target.uid, newRole, role);
       setUsers(prev => prev.map(u => u.uid === target.uid ? { ...u, role: newRole } : u));
       await createLog({
         userId: user.uid,

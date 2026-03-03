@@ -5,7 +5,7 @@ import { db } from "@/lib/firebase/config";
 import { UserDoc, UserRole } from "@/types/user";
 
 const COL = "users";
-const ADMIN_EMAIL = "maelcost10@gmail.com";
+const ADMIN_EMAIL = process.env.NEXT_PUBLIC_ADMIN_EMAIL || "maelcost10@gmail.com";
 
 export async function getUser(uid: string): Promise<UserDoc | null> {
   const snap = await getDoc(doc(db, COL, uid));
@@ -52,6 +52,9 @@ export async function getAllUsers(): Promise<UserDoc[]> {
   return snap.docs.map(d => d.data() as UserDoc);
 }
 
-export async function changeUserRole(uid: string, role: UserRole): Promise<void> {
-  await updateDoc(doc(db, COL, uid), { role });
+export async function changeUserRole(uid: string, newRole: UserRole, requesterRole: UserRole): Promise<void> {
+  if (requesterRole !== "admin") {
+    throw new Error("Apenas administradores podem alterar roles");
+  }
+  await updateDoc(doc(db, COL, uid), { role: newRole });
 }

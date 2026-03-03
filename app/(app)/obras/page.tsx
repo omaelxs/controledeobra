@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useObras } from "@/hooks/useObras";
+import { useUserRole } from "@/hooks/useUserRole";
 import { Obra, Pavimento } from "@/types";
 import {
   addPavimento, renamePavimento, deletePavimento,
@@ -52,6 +53,7 @@ function MiniBox({ title, placeholder, onSave, onClose }: { title: string; place
 
 export default function ObrasPage() {
   const { obras, loading, create, update, remove, refresh } = useObras();
+  const { role } = useUserRole();
   const [selId, setSelId]       = useState<string | null>(null);
   const [showForm, setShowForm] = useState(false);
   const [editObra, setEditObra] = useState<Obra | null>(null);
@@ -78,32 +80,32 @@ export default function ObrasPage() {
 
   async function handleAddPav(name: string) {
     if (!sel?.id) return;
-    await addPavimento(sel.id, name, sel.pavimentos ?? []);
+    await addPavimento(sel.id, name, sel.pavimentos ?? [], role);
     await refresh(); setMini(null);
   }
   async function handleDeletePav(pavId: string) {
     if (!sel?.id || !confirm("Excluir pavimento e todas as unidades?")) return;
-    await deletePavimento(sel.id, sel.pavimentos ?? [], pavId);
+    await deletePavimento(sel.id, sel.pavimentos ?? [], pavId, role);
     await refresh();
   }
   async function handleAddApt(pavId: string, name: string) {
     if (!sel?.id) return;
-    await addApartamento(sel.id, sel.pavimentos ?? [], pavId, name);
+    await addApartamento(sel.id, sel.pavimentos ?? [], pavId, name, role);
     await refresh(); setMini(null);
   }
   async function handleDeleteApt(aptId: string) {
     if (!sel?.id || !confirm("Excluir esta unidade?")) return;
-    await deleteApartamento(sel.id, sel.pavimentos ?? [], aptId);
+    await deleteApartamento(sel.id, sel.pavimentos ?? [], aptId, role);
     await refresh();
   }
   async function handleAddAnexo(name: string) {
     if (!sel?.id) return;
-    await addAnexo(sel.id, sel.anexos ?? [], name);
+    await addAnexo(sel.id, sel.anexos ?? [], name, role);
     await refresh(); setMini(null);
   }
   async function handleDeleteAnexo(anexoId: string) {
     if (!sel?.id || !confirm("Excluir este anexo?")) return;
-    await deleteAnexo(sel.id, sel.anexos ?? [], anexoId);
+    await deleteAnexo(sel.id, sel.anexos ?? [], anexoId, role);
     await refresh();
   }
 

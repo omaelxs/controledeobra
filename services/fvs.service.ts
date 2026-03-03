@@ -14,8 +14,8 @@ export async function getFvs(): Promise<Fvs[]> {
   return snap.docs.map(d => ({ id: d.id, ...d.data() } as Fvs));
 }
 
-export async function createFvs(data: FvsFormData, role?: UserRole): Promise<string> {
-  if (role) assertPermission(role, "create");
+export async function createFvs(data: FvsFormData, role: UserRole): Promise<string> {
+  assertPermission(role, "create");
   const now = Timestamp.now().toDate().toISOString();
   const ref = await addDoc(collection(db, COL), {
     ...data,
@@ -25,11 +25,12 @@ export async function createFvs(data: FvsFormData, role?: UserRole): Promise<str
   return ref.id;
 }
 
-export async function updateFvs(id: string, data: Partial<Fvs>): Promise<void> {
+export async function updateFvs(id: string, data: Partial<Fvs>, role: UserRole): Promise<void> {
+  assertPermission(role, "edit");
   await updateDoc(doc(db, COL, id), data);
 }
 
-export async function deleteFvs(id: string, role?: UserRole): Promise<void> {
-  if (role) assertPermission(role, "delete");
+export async function deleteFvs(id: string, role: UserRole): Promise<void> {
+  assertPermission(role, "delete");
   await deleteDoc(doc(db, COL, id));
 }

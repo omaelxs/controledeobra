@@ -1,0 +1,113 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ── Helpers ──
+    function isAuth() {
+      return request.auth != null;
+    }
+    function getUserRole() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role;
+    }
+    function isAdminOrDev() {
+      return isAuth() && getUserRole() in ['admin', 'dev'];
+    }
+    function isOwner(uid) {
+      return isAuth() && request.auth.uid == uid;
+    }
+
+    // ── Users ──
+    match /users/{uid} {
+      allow read: if isAuth();
+      // Users can update their own profile (displayName, photoURL, online, lastSeen)
+      allow update: if isOwner(uid) &&
+        request.resource.data.diff(resource.data).affectedKeys()
+          .hasOnly(['displayName', 'photoURL', 'online', 'lastSeen']);
+      // Only admin can change roles
+      allow update: if isAdminOrDev() &&
+        request.resource.data.diff(resource.data).affectedKeys()
+          .hasOnly(['role']);
+      // Auto-create on first login
+      allow create: if isOwner(uid);
+    }
+
+    // ── Obras ──
+    match /obras/{obraId} {
+      allow read: if isAuth();
+      allow create, delete: if isAdminOrDev();
+      allow update: if isAdminOrDev();
+    }
+
+    // ── FVS ──
+    match /fvs/{fvsId} {
+      allow read: if isAuth();
+      allow create, delete: if isAdminOrDev();
+      allow update: if isAdminOrDev();
+    }
+
+    // ── NC ──
+    match /nc/{ncId} {
+      allow read: if isAuth();
+      allow create, delete: if isAdminOrDev();
+      allow update: if isAdminOrDev();
+    }
+
+    // ── Responsáveis ──
+    match /responsaveis/{respId} {
+      allow read: if isAuth();
+      allow create, delete: if isAdminOrDev();
+      allow update: if isAdminOrDev();
+    }
+
+    // ── Vistorias ──
+    match /vistorias/{vistoriaId} {
+      allow read: if isAuth();
+      allow create: if isAuth(); // qualquer user pode criar vistoria
+      allow update, delete: if isAdminOrDev();
+    }
+
+    // ── Checklists ──
+    match /checklists/{checklistId} {
+      allow read: if isAuth();
+      allow create, update, delete: if isAdminOrDev();
+    }
+
+    // ── Logs (append-only — NINGUÉM pode editar ou excluir) ──
+    match /logs/{logId} {
+      allow read: if isAdminOrDev();
+      allow create: if isAuth();
+      allow update, delete: if false; // IMUTÁVEL
+    }
+
+    // ── Notifications ──
+    match /notifications/{notifId} {
+      allow read: if isAuth();
+      allow create: if isAdminOrDev();
+      // Qualquer user autenticado pode marcar como lida (readBy)
+      allow update: if isAuth() &&
+        request.resource.data.diff(resource.data).affectedKeys()
+          .hasOnly(['readBy']);
+    }
+
+    // ── Chat General ──
+    match /chat_general/{msgId} {
+      allow read: if isAuth();
+      allow create: if isAuth() &&
+        request.resource.data.userId == request.auth.uid;
+      allow update, delete: if false;
+    }
+
+    // ── Chat Moderators ──
+    match /chat_moderators/{msgId} {
+      allow read: if isAdminOrDev();
+      allow create: if isAdminOrDev() &&
+        request.resource.data.userId == request.auth.uid;
+      allow update, delete: if false;
+    }
+
+    // ── Deny all other access ──
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

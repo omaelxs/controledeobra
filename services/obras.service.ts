@@ -20,24 +20,26 @@ export async function getObra(id: string): Promise<Obra | null> {
   return { id: snap.id, ...snap.data() } as Obra;
 }
 
-export async function createObra(data: ObraFormData, role?: UserRole): Promise<string> {
-  if (role) assertPermission(role, "create");
+export async function createObra(data: ObraFormData, role: UserRole): Promise<string> {
+  assertPermission(role, "create");
   const now = Timestamp.now().toDate().toISOString();
   const ref = await addDoc(collection(db, COL), { ...data, pavimentos: [], anexos: [], criadoEm: now, atualizadoEm: now });
   return ref.id;
 }
 
-export async function updateObra(id: string, data: Partial<Obra>): Promise<void> {
+export async function updateObra(id: string, data: Partial<Obra>, role: UserRole): Promise<void> {
+  assertPermission(role, "edit");
   await updateDoc(doc(db, COL, id), { ...data, atualizadoEm: Timestamp.now().toDate().toISOString() });
 }
 
-export async function deleteObra(id: string, role?: UserRole): Promise<void> {
-  if (role) assertPermission(role, "delete");
+export async function deleteObra(id: string, role: UserRole): Promise<void> {
+  assertPermission(role, "delete");
   await deleteDoc(doc(db, COL, id));
 }
 
 // ── Pavimentos ─────────────────────────────────────────────────
-export async function addPavimento(obraId: string, name: string, pavimentos: Pavimento[]): Promise<void> {
+export async function addPavimento(obraId: string, name: string, pavimentos: Pavimento[], role: UserRole): Promise<void> {
+  assertPermission(role, "create");
   const novo: Pavimento = { id: crypto.randomUUID(), name, apts: [] };
   await updateDoc(doc(db, COL, obraId), {
     pavimentos: [...pavimentos, novo],
@@ -45,12 +47,14 @@ export async function addPavimento(obraId: string, name: string, pavimentos: Pav
   });
 }
 
-export async function renamePavimento(obraId: string, pavimentos: Pavimento[], pavId: string, name: string): Promise<void> {
+export async function renamePavimento(obraId: string, pavimentos: Pavimento[], pavId: string, name: string, role: UserRole): Promise<void> {
+  assertPermission(role, "edit");
   const updated = pavimentos.map(p => p.id === pavId ? { ...p, name } : p);
   await updateDoc(doc(db, COL, obraId), { pavimentos: updated, atualizadoEm: Timestamp.now().toDate().toISOString() });
 }
 
-export async function deletePavimento(obraId: string, pavimentos: Pavimento[], pavId: string): Promise<void> {
+export async function deletePavimento(obraId: string, pavimentos: Pavimento[], pavId: string, role: UserRole): Promise<void> {
+  assertPermission(role, "delete");
   await updateDoc(doc(db, COL, obraId), {
     pavimentos: pavimentos.filter(p => p.id !== pavId),
     atualizadoEm: Timestamp.now().toDate().toISOString(),
@@ -58,31 +62,36 @@ export async function deletePavimento(obraId: string, pavimentos: Pavimento[], p
 }
 
 // ── Apartamentos ───────────────────────────────────────────────
-export async function addApartamento(obraId: string, pavimentos: Pavimento[], pavId: string, name: string): Promise<void> {
+export async function addApartamento(obraId: string, pavimentos: Pavimento[], pavId: string, name: string, role: UserRole): Promise<void> {
+  assertPermission(role, "create");
   const novo: Apartamento = { id: crypto.randomUUID(), name, status: "pendente", classification: "normal" };
   const updated = pavimentos.map(p => p.id === pavId ? { ...p, apts: [...p.apts, novo] } : p);
   await updateDoc(doc(db, COL, obraId), { pavimentos: updated, atualizadoEm: Timestamp.now().toDate().toISOString() });
 }
 
 export async function updateApartamento(obraId: string, pavimentos: Pavimento[], aptId: string, changes: Partial<Apartamento>): Promise<void> {
+  // Vistorias podem ser feitas por qualquer user autenticado (sem assertPermission)
   const updated = pavimentos.map(p => ({ ...p, apts: p.apts.map(a => a.id === aptId ? { ...a, ...changes } : a) }));
   await updateDoc(doc(db, COL, obraId), { pavimentos: updated, atualizadoEm: Timestamp.now().toDate().toISOString() });
 }
 
-export async function deleteApartamento(obraId: string, pavimentos: Pavimento[], aptId: string): Promise<void> {
+export async function deleteApartamento(obraId: string, pavimentos: Pavimento[], aptId: string, role: UserRole): Promise<void> {
+  assertPermission(role, "delete");
   const updated = pavimentos.map(p => ({ ...p, apts: p.apts.filter(a => a.id !== aptId) }));
   await updateDoc(doc(db, COL, obraId), { pavimentos: updated, atualizadoEm: Timestamp.now().toDate().toISOString() });
 }
 
 // ── Anexos ─────────────────────────────────────────────────────
-export async function addAnexo(obraId: string, anexos: { id: string; name: string }[], name: string): Promise<void> {
+export async function addAnexo(obraId: string, anexos: { id: string; name: string }[], name: string, role: UserRole): Promise<void> {
+  assertPermission(role, "create");
   await updateDoc(doc(db, COL, obraId), {
     anexos: [...anexos, { id: crypto.randomUUID(), name }],
     atualizadoEm: Timestamp.now().toDate().toISOString(),
   });
 }
 
-export async function deleteAnexo(obraId: string, anexos: { id: string; name: string }[], anexoId: string): Promise<void> {
+export async function deleteAnexo(obraId: string, anexos: { id: string; name: string }[], anexoId: string, role: UserRole): Promise<void> {
+  assertPermission(role, "delete");
   await updateDoc(doc(db, COL, obraId), {
     anexos: anexos.filter(a => a.id !== anexoId),
     atualizadoEm: Timestamp.now().toDate().toISOString(),

@@ -5,6 +5,7 @@ import { Fvs, FvsFormData, FvsStatus } from "@/types";
 import { getFvs, createFvs, updateFvs, deleteFvs } from "@/services/fvs.service";
 import { getObras } from "@/services/obras.service";
 import { Obra } from "@/types";
+import { useUserRole } from "@/hooks/useUserRole";
 
 const STATUS_LABEL: Record<FvsStatus, string> = { andamento: "Em Andamento", aprovado: "Aprovado", reprovado: "Reprovado" };
 const STATUS_PILL: Record<FvsStatus, string>  = { andamento: "pill-yellow", aprovado: "pill-green", reprovado: "pill-red" };
@@ -28,6 +29,7 @@ function Modal({ title, onClose, children }: { title: string; onClose: () => voi
 const EMPTY_FORM: FvsFormData = { code: "", title: "", obraId: "", category: "Estrutura", criterio: "", items: [] };
 
 export default function FvsPage() {
+  const { role } = useUserRole();
   const [fvsList, setFvsList] = useState<Fvs[]>([]);
   const [obras, setObras]     = useState<Obra[]>([]);
   const [loading, setLoading] = useState(true);
@@ -65,9 +67,9 @@ export default function FvsPage() {
   async function handleSave() {
     if (!form.title.trim() || !form.code.trim()) return;
     if (editFvs?.id) {
-      await updateFvs(editFvs.id, { code: form.code, title: form.title, obraId: form.obraId, category: form.category, criterio: form.criterio, items: form.items });
+      await updateFvs(editFvs.id, { code: form.code, title: form.title, obraId: form.obraId, category: form.category, criterio: form.criterio, items: form.items }, role);
     } else {
-      const id = await createFvs(form);
+      const id = await createFvs(form, role);
       setSelId(id);
     }
     setShowForm(false);
@@ -76,7 +78,7 @@ export default function FvsPage() {
 
   async function handleDelete(id: string) {
     if (!confirm("Excluir esta FVS?")) return;
-    await deleteFvs(id);
+    await deleteFvs(id, role);
     if (selId === id) setSelId(null);
     await load();
   }
@@ -88,12 +90,12 @@ export default function FvsPage() {
     const checked = items.filter(i => i.checked).length;
     const total   = items.length;
     const newStatus: FvsStatus = total === 0 ? "andamento" : checked === total ? "aprovado" : "andamento";
-    await updateFvs(fvsId, { items, status: newStatus });
+    await updateFvs(fvsId, { items, status: newStatus }, role);
     await load();
   }
 
   async function setStatus(id: string, status: FvsStatus) {
-    await updateFvs(id, { status });
+    await updateFvs(id, { status }, role);
     await load();
   }
 

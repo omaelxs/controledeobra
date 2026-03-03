@@ -6,6 +6,7 @@ import { useAuth } from "@/context/AuthContext";
 import { useUserContext } from "@/context/UserContext";
 import { ChatMessage } from "@/types/chat";
 import { onMessages, sendMessage } from "@/services/chat.service";
+import { chatLimiter } from "@/lib/rateLimit";
 
 export default function ChatPanel({ collectionName }: { collectionName: string }) {
   const { user } = useAuth();
@@ -27,6 +28,7 @@ export default function ChatPanel({ collectionName }: { collectionName: string }
 
   async function handleSend() {
     if (!text.trim() || !user || !userDoc || sending) return;
+    if (!chatLimiter.canProceed()) return;
     setSending(true);
     try {
       await sendMessage(collectionName, {

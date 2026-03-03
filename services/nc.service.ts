@@ -14,8 +14,8 @@ export async function getNCs(): Promise<NC[]> {
   return snap.docs.map(d => ({ id: d.id, ...d.data() } as NC));
 }
 
-export async function createNC(data: NCFormData, role?: UserRole): Promise<string> {
-  if (role) assertPermission(role, "create");
+export async function createNC(data: NCFormData, role: UserRole): Promise<string> {
+  assertPermission(role, "create");
   const now = Timestamp.now().toDate().toISOString();
   const today = new Date().toISOString().slice(0, 10);
   const overdue = data.deadline ? new Date(data.deadline) < new Date() : false;
@@ -32,11 +32,12 @@ export async function createNC(data: NCFormData, role?: UserRole): Promise<strin
   return ref.id;
 }
 
-export async function updateNC(id: string, data: Partial<NC>): Promise<void> {
+export async function updateNC(id: string, data: Partial<NC>, role: UserRole): Promise<void> {
+  assertPermission(role, "edit");
   await updateDoc(doc(db, COL, id), data);
 }
 
-export async function deleteNC(id: string, role?: UserRole): Promise<void> {
-  if (role) assertPermission(role, "delete");
+export async function deleteNC(id: string, role: UserRole): Promise<void> {
+  assertPermission(role, "delete");
   await deleteDoc(doc(db, COL, id));
 }

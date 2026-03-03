@@ -5,6 +5,7 @@ import { NC, NCFormData, NcSeverity, NcStatus } from "@/types";
 import { getNCs, createNC, updateNC, deleteNC } from "@/services/nc.service";
 import { getObras } from "@/services/obras.service";
 import { Obra } from "@/types";
+import { useUserRole } from "@/hooks/useUserRole";
 
 const SEV_PILL: Record<NcSeverity, string>  = { crítica: "pill-red", alta: "pill-red", média: "pill-yellow", baixa: "pill-gray" };
 const SEV_COLOR: Record<NcSeverity, string> = { crítica: "var(--red-accent)", alta: "#f97316", média: "#eab308", baixa: "rgba(255,255,255,.4)" };
@@ -28,6 +29,7 @@ function Modal({ title, onClose, children }: { title: string; onClose: () => voi
 const EMPTY: NCFormData = { title: "", obraId: "", location: "", desc: "", severity: "média", deadline: "" };
 
 export default function NcPage() {
+  const { role } = useUserRole();
   const [ncs, setNcs]       = useState<NC[]>([]);
   const [obras, setObras]   = useState<Obra[]>([]);
   const [loading, setLoading] = useState(true);
@@ -62,9 +64,9 @@ export default function NcPage() {
   async function handleSave() {
     if (!form.title.trim()) return;
     if (editNc?.id) {
-      await updateNC(editNc.id, { title: form.title, obraId: form.obraId, location: form.location, desc: form.desc, severity: form.severity, deadline: form.deadline, overdue: form.deadline ? new Date(form.deadline) < new Date() : false });
+      await updateNC(editNc.id, { title: form.title, obraId: form.obraId, location: form.location, desc: form.desc, severity: form.severity, deadline: form.deadline, overdue: form.deadline ? new Date(form.deadline) < new Date() : false }, role);
     } else {
-      const id = await createNC(form);
+      const id = await createNC(form, role);
       setSelId(id);
     }
     setShowForm(false);
@@ -73,14 +75,14 @@ export default function NcPage() {
 
   async function handleDelete(id: string) {
     if (!confirm("Excluir esta NC?")) return;
-    await deleteNC(id);
+    await deleteNC(id, role);
     if (selId === id) setSelId(null);
     await load();
   }
 
   async function toggleStatus(nc: NC) {
     const next: NcStatus = nc.status === "open" ? "closed" : "open";
-    await updateNC(nc.id!, { status: next });
+    await updateNC(nc.id!, { status: next }, role);
     await load();
   }
 

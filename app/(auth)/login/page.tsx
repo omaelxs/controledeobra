@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/context/AuthContext";
 import { motion } from "framer-motion";
+import { loginLimiter } from "@/lib/rateLimit";
 
 export default function LoginPage() {
   const { login } = useAuth();
@@ -17,6 +18,10 @@ export default function LoginPage() {
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setError("");
+    if (!loginLimiter.canProceed()) {
+      setError("Muitas tentativas. Aguarde um minuto.");
+      return;
+    }
     setLoading(true);
     try {
       await login(email, password);

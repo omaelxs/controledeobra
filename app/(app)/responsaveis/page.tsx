@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback } from "react";
 import { Responsavel, ResponsavelFormData, RtTipo } from "@/types";
 import { getResponsaveis, createResponsavel, updateResponsavel, deleteResponsavel } from "@/services/responsaveis.service";
 import { useAuth } from "@/context/AuthContext";
+import { useUserRole } from "@/hooks/useUserRole";
 
 const TIPOS: { value: RtTipo; label: string }[] = [
   { value: "rt",         label: "Responsável Técnico" },
@@ -40,6 +41,7 @@ function initials(name: string) {
 
 export default function ResponsaveisPage() {
   const { user } = useAuth();
+  const { role } = useUserRole();
   const [list, setList]         = useState<Responsavel[]>([]);
   const [loading, setLoading]   = useState(true);
   const [showForm, setShowForm] = useState(false);
@@ -63,15 +65,15 @@ export default function ResponsaveisPage() {
 
   async function handleSave() {
     if (!form.nome.trim()) return;
-    if (editRt?.id) await updateResponsavel(editRt.id, form);
-    else await createResponsavel(form);
+    if (editRt?.id) await updateResponsavel(editRt.id, form, role);
+    else await createResponsavel(form, role);
     setShowForm(false);
     await load();
   }
 
   async function handleDelete(id: string) {
     if (!confirm("Excluir este responsável?")) return;
-    await deleteResponsavel(id);
+    await deleteResponsavel(id, role);
     await load();
   }
 

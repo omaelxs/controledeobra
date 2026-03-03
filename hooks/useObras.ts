@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from "react";
 import { Obra, ObraFormData } from "@/types";
+import { UserRole } from "@/types/user";
 import {
   getObras,
   getObra,
@@ -7,8 +8,10 @@ import {
   updateObra,
   deleteObra,
 } from "@/services/obras.service";
+import { useUserRole } from "@/hooks/useUserRole";
 
 export function useObras() {
+  const { role } = useUserRole();
   const [obras, setObras] = useState<Obra[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -32,18 +35,18 @@ export function useObras() {
   }, [fetchObras]);
 
   async function create(data: ObraFormData) {
-    const id = await createObra(data);
+    const id = await createObra(data, role);
     await fetchObras();
     return id;
   }
 
   async function update(id: string, data: Partial<ObraFormData>) {
-    await updateObra(id, data);
+    await updateObra(id, data, role);
     await fetchObras();
   }
 
   async function remove(id: string) {
-    await deleteObra(id);
+    await deleteObra(id, role);
     setObras((prev) => prev.filter((o) => o.id !== id));
   }
 
