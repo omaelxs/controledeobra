@@ -86,17 +86,28 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }
 
   async function logout() {
-    if (user) {
-      await setUserOnline(user.uid, false);
-      await createLog({
-        userId: user.uid,
-        userEmail: user.email ?? "",
-        action: "logout",
-        target: "session",
-        details: "Logout realizado",
-      });
+    try {
+      if (user) {
+        // Tenta marcar como offline, mas não esperamos
+        setUserOnline(user.uid, false).catch(() => {});
+
+        // Tenta registrar logout, mas não esperamos
+        createLog({
+          userId: user.uid,
+          userEmail: user.email ?? "",
+          action: "logout",
+          target: "session",
+          details: "Logout realizado",
+        }).catch(() => {});
+      }
+
+      // Faz logout do Firebase imediatamente
+      await signOut(auth);
+    } catch (e) {
+      console.error("Erro ao fazer logout:", e);
+      // Mesmo com erro, força o logout do Firebase
+      await signOut(auth).catch(() => {});
     }
-    await signOut(auth);
   }
 
   return (
