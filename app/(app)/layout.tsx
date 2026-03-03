@@ -134,17 +134,12 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   const { onlineCount } = useOnlineUsers();
 
   useEffect(() => {
-    if (!loading && !user) router.push("/login");
+    if (loading) return; // Espera terminar de carregar
+    if (!user) {
+      // Apenas redireciona se realmente não tem user
+      router.push("/login");
+    }
   }, [user, loading, router]);
-
-  // Timeout: se auth não resolver em 5s, redireciona para login
-  useEffect(() => {
-    if (!loading) return;
-    const timer = setTimeout(() => {
-      if (!user) router.push("/login");
-    }, 5000);
-    return () => clearTimeout(timer);
-  }, [loading, user, router]);
 
   if (loading || !user) return (
     <div style={{ minHeight: "100vh", background: "var(--bg)", display: "flex", alignItems: "center", justifyContent: "center" }}>
