@@ -25,16 +25,24 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
-      setUser(firebaseUser);
-      if (firebaseUser) {
-        // Auto-criar doc se não existe + marcar online
-        await createUserIfNotExists(firebaseUser.uid, firebaseUser.email ?? "");
-        await setUserOnline(firebaseUser.uid, true);
-      }
+    try {
+      const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
+        setUser(firebaseUser);
+        if (firebaseUser) {
+          try {
+            await createUserIfNotExists(firebaseUser.uid, firebaseUser.email ?? "");
+            await setUserOnline(firebaseUser.uid, true);
+          } catch (e) {
+            console.error("Erro ao inicializar user doc:", e);
+          }
+        }
+        setLoading(false);
+      });
+      return unsubscribe;
+    } catch (e) {
+      console.error("Erro ao conectar Firebase Auth:", e);
       setLoading(false);
-    });
-    return unsubscribe;
+    }
   }, []);
 
   // Marcar offline ao fechar aba
