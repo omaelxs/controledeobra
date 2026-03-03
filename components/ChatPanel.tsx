@@ -14,13 +14,23 @@ export default function ChatPanel({ collectionName }: { collectionName: string }
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [text, setText] = useState("");
   const [sending, setSending] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const endRef = useRef<HTMLDivElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    const unsub = onMessages(collectionName, setMessages);
-    return unsub;
-  }, [collectionName]);
+    if (!user || !userDoc) return;
+    try {
+      const unsub = onMessages(collectionName, (msgs) => {
+        setMessages(msgs);
+        setError(null);
+      });
+      return unsub;
+    } catch (e) {
+      console.error("Erro ao carregar mensagens:", e);
+      setError("Erro ao carregar mensagens");
+    }
+  }, [collectionName, user, userDoc]);
 
   useEffect(() => {
     endRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -53,9 +63,26 @@ export default function ChatPanel({ collectionName }: { collectionName: string }
 
   return (
     <div style={{ display: "flex", flexDirection: "column", height: "100%" }}>
+      {error && (
+        <div style={{
+          padding: "12px 16px",
+          background: "rgba(164,22,26,.12)",
+          border: "2px solid var(--red-accent)",
+          color: "var(--red-accent)",
+          fontSize: 11,
+          fontWeight: 600,
+        }}>
+          {error}
+        </div>
+      )}
+
       {/* Messages */}
       <div ref={containerRef} style={{ flex: 1, overflow: "auto", padding: "16px 20px" }}>
-        {messages.length === 0 ? (
+        {!user || !userDoc ? (
+          <div style={{ textAlign: "center", color: "rgba(255,255,255,.2)", fontSize: 11, marginTop: 60 }}>
+            Carregando contexto...
+          </div>
+        ) : messages.length === 0 ? (
           <div style={{ textAlign: "center", color: "rgba(255,255,255,.2)", fontSize: 11, marginTop: 60 }}>
             Nenhuma mensagem ainda. Comece a conversa!
           </div>

@@ -36,6 +36,17 @@ const CARDS = [
       </svg>
     ),
   },
+  {
+    href: "/admin/settings",
+    title: "Configurações",
+    desc: "Configurar o sistema",
+    icon: (
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+        <circle cx="12" cy="12" r="3" strokeLinecap="square"/>
+        <path d="M12 1v6m0 6v6M4.22 4.22l4.24 4.24m5.08 5.08l4.24 4.24M1 12h6m6 0h6M4.22 19.78l4.24-4.24m5.08-5.08l4.24-4.24" strokeLinecap="square"/>
+      </svg>
+    ),
+  },
 ];
 
 export default function AdminPage() {

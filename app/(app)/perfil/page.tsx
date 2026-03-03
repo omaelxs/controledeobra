@@ -22,7 +22,25 @@ export default function PerfilPage() {
   const [saving, setSaving] = useState(false);
   const [uploading, setUploading] = useState(false);
 
-  if (!user || !userDoc) return null;
+  if (!user) {
+    return (
+      <PageTransition>
+        <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center" }}>
+          <div style={{ fontSize: 12, color: "rgba(255,255,255,.4)" }}>Autenticando...</div>
+        </div>
+      </PageTransition>
+    );
+  }
+
+  if (!userDoc) {
+    return (
+      <PageTransition>
+        <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center" }}>
+          <div style={{ fontSize: 12, color: "rgba(255,255,255,.4)" }}>Carregando dados do perfil...</div>
+        </div>
+      </PageTransition>
+    );
+  }
 
   async function handleSaveName() {
     if (!displayName.trim() || !user) return;

@@ -65,11 +65,6 @@ const NAV: NavGroup[] = [
   {
     section: "Equipe",
     items: [
-      { href: "/responsaveis", label: "Responsáveis", icon: (
-        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-          <path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2M9 11a4 4 0 100-8 4 4 0 000 8zM23 21v-2a4 4 0 00-3-3.87M16 3.13a4 4 0 010 7.75" strokeLinecap="square"/>
-        </svg>
-      )},
       { href: "/perfil", label: "Meu Perfil", icon: (
         <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
           <path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2M12 11a4 4 0 100-8 4 4 0 000 8z" strokeLinecap="square"/>
@@ -102,6 +97,12 @@ const NAV: NavGroup[] = [
           <polyline points="14 2 14 8 20 8" strokeLinecap="square"/>
           <line x1="16" y1="13" x2="8" y2="13" strokeLinecap="square"/>
           <line x1="16" y1="17" x2="8" y2="17" strokeLinecap="square"/>
+        </svg>
+      )},
+      { href: "/admin/settings", label: "Configurações", adminOnly: true, icon: (
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+          <circle cx="12" cy="12" r="3" strokeLinecap="square"/>
+          <path d="M12 1v6m0 6v6M4.22 4.22l4.24 4.24m5.08 5.08l4.24 4.24M1 12h6m6 0h6M4.22 19.78l4.24-4.24m5.08-5.08l4.24-4.24" strokeLinecap="square"/>
         </svg>
       )},
       { href: "/admin/chat", label: "Chat Moderadores", adminOnly: true, icon: (

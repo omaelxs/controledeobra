@@ -74,20 +74,25 @@ export default function VistoriasPage() {
   }
 
   async function openScope(scope: Scope) {
-    const template = await getChecklistByScope(scope);
-    const items = template?.items ?? DEFAULT_ITEMS[scope].map((text, i) => ({ id: `${scope}-${i}`, text }));
-    setChecklistItems(items);
+    try {
+      const template = await getChecklistByScope(scope);
+      const items = template?.items ?? DEFAULT_ITEMS[scope].map((text, i) => ({ id: `${scope}-${i}`, text }));
+      setChecklistItems(items);
 
-    const prev = scopeResults[scope];
-    if (prev) {
-      const resMap: Record<string, ScopeItemResult> = {};
-      prev.items.forEach(ir => { resMap[ir.itemId] = ir; });
-      setItemResults(resMap);
-    } else {
-      setItemResults({});
+      const prev = scopeResults[scope];
+      if (prev) {
+        const resMap: Record<string, ScopeItemResult> = {};
+        prev.items.forEach(ir => { resMap[ir.itemId] = ir; });
+        setItemResults(resMap);
+      } else {
+        setItemResults({});
+      }
+
+      setActiveScope(scope);
+    } catch (e) {
+      console.error("Erro ao carregar checklist:", e);
+      addToast("Erro ao carregar checklist", "error");
     }
-
-    setActiveScope(scope);
   }
 
   function setItemStatus(itemId: string, status: ScopeStatus) {
