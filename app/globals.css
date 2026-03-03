@@ -165,3 +165,9 @@ body {
   background-image: radial-gradient(rgba(255,255,255,.06) 1px, transparent 1px);
   background-size: 24px 24px;
 }
+
+/* ── Skeleton shimmer ── */
+@keyframes skeleton-shimmer {
+  0% { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}

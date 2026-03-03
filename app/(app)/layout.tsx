@@ -6,6 +6,8 @@ import Link from "next/link";
 import { useAuth } from "@/context/AuthContext";
 import { useUserRole } from "@/hooks/useUserRole";
 import { ObrasProvider } from "@/context/ObrasContext";
+import { ToastProvider } from "@/context/ToastContext";
+import ToastContainer from "@/components/Toast";
 
 type NavItem = { href: string; label: string; icon: React.ReactNode; adminOnly?: boolean };
 type NavGroup = { section: string; items: NavItem[]; adminOnly?: boolean };
@@ -139,7 +141,9 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
     .map(g => ({ ...g, items: g.items.filter(i => !i.adminOnly || isAdminOrDev) }));
 
   return (
+    <ToastProvider>
     <ObrasProvider>
+      <ToastContainer />
       <div style={{ display: "flex", height: "100vh", background: "var(--bg)", color: "var(--white)" }}>
 
         {/* SIDEBAR */}
@@ -305,5 +309,6 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
         </div>
       </div>
     </ObrasProvider>
+    </ToastProvider>
   );
 }
