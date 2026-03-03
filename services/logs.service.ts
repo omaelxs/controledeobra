@@ -1,5 +1,6 @@
 import {
   collection, addDoc, getDocs, query, orderBy, where, limit, Timestamp,
+  type QueryConstraint,
 } from "firebase/firestore";
 import { db } from "@/lib/firebase/config";
 import { LogDoc } from "@/types/log";
@@ -19,7 +20,7 @@ export async function getLogs(filters?: {
   userId?: string;
   limitCount?: number;
 }): Promise<LogDoc[]> {
-  const constraints = [orderBy("timestamp", "desc")];
+  const constraints: QueryConstraint[] = [orderBy("timestamp", "desc")];
 
   if (filters?.action) constraints.push(where("action", "==", filters.action));
   if (filters?.target) constraints.push(where("target", "==", filters.target));

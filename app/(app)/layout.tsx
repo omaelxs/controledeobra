@@ -8,6 +8,9 @@ import { useUserRole } from "@/hooks/useUserRole";
 import { ObrasProvider } from "@/context/ObrasContext";
 import { ToastProvider } from "@/context/ToastContext";
 import ToastContainer from "@/components/Toast";
+import { useOnlineStatus } from "@/hooks/useOnlineStatus";
+import { useOnlineUsers } from "@/hooks/useOnlineUsers";
+import NotificationBell from "@/components/NotificationBell";
 
 type NavItem = { href: string; label: string; icon: React.ReactNode; adminOnly?: boolean };
 type NavGroup = { section: string; items: NavItem[]; adminOnly?: boolean };
@@ -126,6 +129,8 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   const { userDoc, role, isAdminOrDev } = useUserRole();
   const router   = useRouter();
   const pathname = usePathname();
+  useOnlineStatus();
+  const { onlineCount } = useOnlineUsers();
 
   useEffect(() => {
     if (!loading && !user) router.push("/login");
@@ -288,6 +293,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
               Sistema de Controle de Obras
             </div>
             <div style={{ marginLeft: "auto", display: "flex", gap: 14, alignItems: "center" }}>
+              <NotificationBell />
               {/* Role badge */}
               <span style={{
                 fontSize: 8, fontWeight: 800, letterSpacing: ".14em",
@@ -299,7 +305,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
               {/* Online indicator */}
               <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
                 <div style={{ width: 6, height: 6, background: "#22c55e", boxShadow: "0 0 6px #22c55e" }} />
-                <span style={{ fontSize: 8, fontWeight: 700, letterSpacing: ".14em", textTransform: "uppercase", color: "rgba(255,255,255,.3)" }}>Online</span>
+                <span style={{ fontSize: 8, fontWeight: 700, letterSpacing: ".14em", textTransform: "uppercase", color: "rgba(255,255,255,.3)" }}>{onlineCount} Online</span>
               </div>
             </div>
           </div>
