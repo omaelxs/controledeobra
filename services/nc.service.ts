@@ -3,6 +3,8 @@ import {
 } from "firebase/firestore";
 import { db } from "@/lib/firebase/config";
 import { NC, NCFormData } from "@/types";
+import { UserRole } from "@/types/user";
+import { assertPermission } from "@/lib/permissions";
 
 const COL = "nc";
 
@@ -12,7 +14,8 @@ export async function getNCs(): Promise<NC[]> {
   return snap.docs.map(d => ({ id: d.id, ...d.data() } as NC));
 }
 
-export async function createNC(data: NCFormData): Promise<string> {
+export async function createNC(data: NCFormData, role?: UserRole): Promise<string> {
+  if (role) assertPermission(role, "create");
   const now = Timestamp.now().toDate().toISOString();
   const today = new Date().toISOString().slice(0, 10);
   const overdue = data.deadline ? new Date(data.deadline) < new Date() : false;
@@ -33,6 +36,7 @@ export async function updateNC(id: string, data: Partial<NC>): Promise<void> {
   await updateDoc(doc(db, COL, id), data);
 }
 
-export async function deleteNC(id: string): Promise<void> {
+export async function deleteNC(id: string, role?: UserRole): Promise<void> {
+  if (role) assertPermission(role, "delete");
   await deleteDoc(doc(db, COL, id));
 }

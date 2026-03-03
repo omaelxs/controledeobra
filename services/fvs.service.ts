@@ -3,6 +3,8 @@ import {
 } from "firebase/firestore";
 import { db } from "@/lib/firebase/config";
 import { Fvs, FvsFormData, FvsStatus } from "@/types";
+import { UserRole } from "@/types/user";
+import { assertPermission } from "@/lib/permissions";
 
 const COL = "fvs";
 
@@ -12,7 +14,8 @@ export async function getFvs(): Promise<Fvs[]> {
   return snap.docs.map(d => ({ id: d.id, ...d.data() } as Fvs));
 }
 
-export async function createFvs(data: FvsFormData): Promise<string> {
+export async function createFvs(data: FvsFormData, role?: UserRole): Promise<string> {
+  if (role) assertPermission(role, "create");
   const now = Timestamp.now().toDate().toISOString();
   const ref = await addDoc(collection(db, COL), {
     ...data,
@@ -26,6 +29,7 @@ export async function updateFvs(id: string, data: Partial<Fvs>): Promise<void> {
   await updateDoc(doc(db, COL, id), data);
 }
 
-export async function deleteFvs(id: string): Promise<void> {
+export async function deleteFvs(id: string, role?: UserRole): Promise<void> {
+  if (role) assertPermission(role, "delete");
   await deleteDoc(doc(db, COL, id));
 }

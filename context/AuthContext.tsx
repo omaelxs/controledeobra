@@ -8,6 +8,8 @@ import {
   onAuthStateChanged,
 } from "firebase/auth";
 import { auth } from "@/lib/firebase/config";
+import { createUserIfNotExists, setUserOnline } from "@/services/users.service";
+import { createLog } from "@/services/logs.service";
 
 interface AuthContextValue {
   user: User | null;
@@ -23,18 +25,69 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, (firebaseUser) => {
+    const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
       setUser(firebaseUser);
+      if (firebaseUser) {
+        // Auto-criar doc se não existe + marcar online
+        await createUserIfNotExists(firebaseUser.uid, firebaseUser.email ?? "");
+        await setUserOnline(firebaseUser.uid, true);
+      }
       setLoading(false);
     });
     return unsubscribe;
   }, []);
 
+  // Marcar offline ao fechar aba
+  useEffect(() => {
+    function handleUnload() {
+      if (user) {
+        // sendBeacon para garantir que executa antes de fechar
+        const payload = JSON.stringify({ uid: user.uid });
+        navigator.sendBeacon?.("/api/offline", payload);
+        // Fallback: tenta setar offline direto (pode não completar)
+        setUserOnline(user.uid, false).catch(() => {});
+      }
+    }
+    function handleVisibility() {
+      if (!user) return;
+      if (document.visibilityState === "hidden") {
+        setUserOnline(user.uid, false).catch(() => {});
+      } else {
+        setUserOnline(user.uid, true).catch(() => {});
+      }
+    }
+
+    window.addEventListener("beforeunload", handleUnload);
+    document.addEventListener("visibilitychange", handleVisibility);
+    return () => {
+      window.removeEventListener("beforeunload", handleUnload);
+      document.removeEventListener("visibilitychange", handleVisibility);
+    };
+  }, [user]);
+
   async function login(email: string, password: string) {
-    await signInWithEmailAndPassword(auth, email, password);
+    const cred = await signInWithEmailAndPassword(auth, email, password);
+    // Log de login
+    await createLog({
+      userId: cred.user.uid,
+      userEmail: cred.user.email ?? "",
+      action: "login",
+      target: "session",
+      details: "Login realizado",
+    });
   }
 
   async function logout() {
+    if (user) {
+      await setUserOnline(user.uid, false);
+      await createLog({
+        userId: user.uid,
+        userEmail: user.email ?? "",
+        action: "logout",
+        target: "session",
+        details: "Logout realizado",
+      });
+    }
     await signOut(auth);
   }
 

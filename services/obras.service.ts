@@ -3,6 +3,8 @@ import {
 } from "firebase/firestore";
 import { db } from "@/lib/firebase/config";
 import { Obra, ObraFormData, Pavimento, Apartamento } from "@/types";
+import { UserRole } from "@/types/user";
+import { assertPermission } from "@/lib/permissions";
 
 const COL = "obras";
 
@@ -18,7 +20,8 @@ export async function getObra(id: string): Promise<Obra | null> {
   return { id: snap.id, ...snap.data() } as Obra;
 }
 
-export async function createObra(data: ObraFormData): Promise<string> {
+export async function createObra(data: ObraFormData, role?: UserRole): Promise<string> {
+  if (role) assertPermission(role, "create");
   const now = Timestamp.now().toDate().toISOString();
   const ref = await addDoc(collection(db, COL), { ...data, pavimentos: [], anexos: [], criadoEm: now, atualizadoEm: now });
   return ref.id;
@@ -28,7 +31,8 @@ export async function updateObra(id: string, data: Partial<Obra>): Promise<void>
   await updateDoc(doc(db, COL, id), { ...data, atualizadoEm: Timestamp.now().toDate().toISOString() });
 }
 
-export async function deleteObra(id: string): Promise<void> {
+export async function deleteObra(id: string, role?: UserRole): Promise<void> {
+  if (role) assertPermission(role, "delete");
   await deleteDoc(doc(db, COL, id));
 }
 

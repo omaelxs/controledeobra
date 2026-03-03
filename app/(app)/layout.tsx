@@ -4,9 +4,13 @@ import { useEffect } from "react";
 import { useRouter, usePathname } from "next/navigation";
 import Link from "next/link";
 import { useAuth } from "@/context/AuthContext";
+import { useUserRole } from "@/hooks/useUserRole";
 import { ObrasProvider } from "@/context/ObrasContext";
 
-const NAV = [
+type NavItem = { href: string; label: string; icon: React.ReactNode; adminOnly?: boolean };
+type NavGroup = { section: string; items: NavItem[]; adminOnly?: boolean };
+
+const NAV: NavGroup[] = [
   {
     section: "Principal",
     items: [
@@ -44,6 +48,16 @@ const NAV = [
     ],
   },
   {
+    section: "Comunicação",
+    items: [
+      { href: "/chat", label: "Chat Geral", icon: (
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+          <path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z" strokeLinecap="square"/>
+        </svg>
+      )},
+    ],
+  },
+  {
     section: "Equipe",
     items: [
       { href: "/responsaveis", label: "Responsáveis", icon: (
@@ -51,12 +65,63 @@ const NAV = [
           <path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2M9 11a4 4 0 100-8 4 4 0 000 8zM23 21v-2a4 4 0 00-3-3.87M16 3.13a4 4 0 010 7.75" strokeLinecap="square"/>
         </svg>
       )},
+      { href: "/perfil", label: "Meu Perfil", icon: (
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+          <path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2M12 11a4 4 0 100-8 4 4 0 000 8z" strokeLinecap="square"/>
+        </svg>
+      )},
+    ],
+  },
+  {
+    section: "Administração",
+    adminOnly: true,
+    items: [
+      { href: "/admin", label: "Painel Admin", adminOnly: true, icon: (
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+          <path d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" strokeLinecap="square"/>
+        </svg>
+      )},
+      { href: "/admin/users", label: "Usuários", adminOnly: true, icon: (
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+          <path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2M9 11a4 4 0 100-8 4 4 0 000 8z" strokeLinecap="square"/>
+        </svg>
+      )},
+      { href: "/admin/notifications", label: "Notificações", adminOnly: true, icon: (
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+          <path d="M18 8A6 6 0 006 8c0 7-3 9-3 9h18s-3-2-3-9M13.73 21a2 2 0 01-3.46 0" strokeLinecap="square"/>
+        </svg>
+      )},
+      { href: "/admin/logs", label: "Logs", adminOnly: true, icon: (
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+          <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z" strokeLinecap="square"/>
+          <polyline points="14 2 14 8 20 8" strokeLinecap="square"/>
+          <line x1="16" y1="13" x2="8" y2="13" strokeLinecap="square"/>
+          <line x1="16" y1="17" x2="8" y2="17" strokeLinecap="square"/>
+        </svg>
+      )},
+      { href: "/admin/chat", label: "Chat Moderadores", adminOnly: true, icon: (
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+          <path d="M21 11.5a8.38 8.38 0 01-.9 3.8 8.5 8.5 0 01-7.6 4.7 8.38 8.38 0 01-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 01-.9-3.8 8.5 8.5 0 014.7-7.6 8.38 8.38 0 013.8-.9h.5a8.48 8.48 0 018 8v.5z" strokeLinecap="square"/>
+        </svg>
+      )},
     ],
   },
 ];
 
+const ROLE_LABEL: Record<string, string> = {
+  admin: "ADMIN",
+  dev: "DEV",
+  user: "USER",
+};
+const ROLE_COLOR: Record<string, string> = {
+  admin: "var(--red-accent)",
+  dev: "#eab308",
+  user: "rgba(255,255,255,.35)",
+};
+
 export default function AppLayout({ children }: { children: React.ReactNode }) {
   const { user, loading, logout } = useAuth();
+  const { userDoc, role, isAdminOrDev } = useUserRole();
   const router   = useRouter();
   const pathname = usePathname();
 
@@ -66,7 +131,12 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
 
   if (loading || !user) return null;
 
-  const initials = user.email?.slice(0, 2).toUpperCase() ?? "??";
+  const displayName = userDoc?.displayName ?? user.email?.split("@")[0] ?? "?";
+  const initials = displayName.slice(0, 2).toUpperCase();
+
+  const filteredNav = NAV
+    .filter(g => !g.adminOnly || isAdminOrDev)
+    .map(g => ({ ...g, items: g.items.filter(i => !i.adminOnly || isAdminOrDev) }));
 
   return (
     <ObrasProvider>
@@ -87,15 +157,13 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
             padding: "24px 20px",
             borderBottom: "2px solid #000",
             background: "var(--red)",
+            position: "relative", overflow: "hidden",
           }}>
-            {/* dot grid overlay */}
             <div style={{
-              position: "absolute",
-              inset: 0,
+              position: "absolute", inset: 0,
               backgroundImage: "radial-gradient(rgba(0,0,0,.15) 1px, transparent 1px)",
               backgroundSize: "20px 20px",
               pointerEvents: "none",
-              borderRadius: "inherit",
             }} />
             <div style={{ position: "relative", display: "flex", alignItems: "center", gap: 10 }}>
               <div style={{
@@ -123,11 +191,11 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
 
           {/* Nav */}
           <nav style={{ flex: 1, padding: "8px 0", overflowY: "auto" }}>
-            {NAV.map(group => (
+            {filteredNav.map(group => (
               <div key={group.section}>
                 <div style={{
                   fontSize: 8, fontWeight: 800, letterSpacing: ".26em", textTransform: "uppercase",
-                  color: "rgba(255,255,255,.22)", padding: "18px 20px 6px",
+                  color: group.adminOnly ? "rgba(229,56,59,.35)" : "rgba(255,255,255,.22)", padding: "18px 20px 6px",
                 }}>{group.section}</div>
                 {group.items.map(item => {
                   const active = pathname === item.href || pathname.startsWith(item.href + "/");
@@ -167,15 +235,29 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
             <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
               <div style={{
                 width: 32, height: 32,
-                background: "var(--red)",
+                background: userDoc?.photoURL ? "transparent" : "var(--red)",
                 border: "2px solid #000",
                 boxShadow: "2px 2px 0 #000",
                 display: "flex", alignItems: "center", justifyContent: "center",
                 fontSize: 10, fontWeight: 900, flexShrink: 0, color: "#fff",
-              }}>{initials}</div>
+                overflow: "hidden",
+              }}>
+                {userDoc?.photoURL ? (
+                  <img src={userDoc.photoURL} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+                ) : initials}
+              </div>
               <div style={{ flex: 1, minWidth: 0 }}>
-                <div style={{ fontSize: 11, fontWeight: 700, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", color: "rgba(255,255,255,.8)" }}>
-                  {user.email}
+                <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                  <span style={{ fontSize: 11, fontWeight: 700, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", color: "rgba(255,255,255,.8)" }}>
+                    {displayName}
+                  </span>
+                  <span style={{
+                    fontSize: 7, fontWeight: 800, letterSpacing: ".1em",
+                    padding: "1px 5px", borderRadius: 3,
+                    background: `${ROLE_COLOR[role]}20`,
+                    border: `1px solid ${ROLE_COLOR[role]}40`,
+                    color: ROLE_COLOR[role],
+                  }}>{ROLE_LABEL[role]}</span>
                 </div>
                 <button onClick={logout} style={{
                   fontSize: 8, color: "var(--red-accent)", textTransform: "uppercase",
@@ -201,9 +283,20 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
             <div style={{ fontSize: 8, fontWeight: 800, letterSpacing: ".2em", textTransform: "uppercase", color: "rgba(255,255,255,.2)" }}>
               Sistema de Controle de Obras
             </div>
-            <div style={{ marginLeft: "auto", display: "flex", gap: 6, alignItems: "center" }}>
-              <div style={{ width: 6, height: 6, background: "#22c55e", boxShadow: "0 0 6px #22c55e" }} />
-              <span style={{ fontSize: 8, fontWeight: 700, letterSpacing: ".14em", textTransform: "uppercase", color: "rgba(255,255,255,.3)" }}>Online</span>
+            <div style={{ marginLeft: "auto", display: "flex", gap: 14, alignItems: "center" }}>
+              {/* Role badge */}
+              <span style={{
+                fontSize: 8, fontWeight: 800, letterSpacing: ".14em",
+                padding: "2px 8px", borderRadius: 3,
+                background: `${ROLE_COLOR[role]}15`,
+                border: `1px solid ${ROLE_COLOR[role]}30`,
+                color: ROLE_COLOR[role],
+              }}>{ROLE_LABEL[role]}</span>
+              {/* Online indicator */}
+              <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
+                <div style={{ width: 6, height: 6, background: "#22c55e", boxShadow: "0 0 6px #22c55e" }} />
+                <span style={{ fontSize: 8, fontWeight: 700, letterSpacing: ".14em", textTransform: "uppercase", color: "rgba(255,255,255,.3)" }}>Online</span>
+              </div>
             </div>
           </div>
           <div style={{ flex: 1, overflow: "hidden", display: "flex", flexDirection: "column" }}>
