@@ -15,7 +15,14 @@ export async function getUser(uid: string): Promise<UserDoc | null> {
 
 export async function createUserIfNotExists(uid: string, email: string): Promise<UserDoc> {
   const existing = await getUser(uid);
-  if (existing) return existing;
+  if (existing) {
+    // Garantir que o email admin sempre tenha role admin
+    if (email === ADMIN_EMAIL && existing.role !== "admin") {
+      await updateDoc(doc(db, COL, uid), { role: "admin" });
+      return { ...existing, role: "admin" };
+    }
+    return existing;
+  }
 
   const role: UserRole = email === ADMIN_EMAIL ? "admin" : "user";
   const now = Timestamp.now().toDate().toISOString();
