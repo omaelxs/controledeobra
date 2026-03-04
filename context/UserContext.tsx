@@ -5,8 +5,6 @@ import { doc, onSnapshot } from "firebase/firestore";
 import { db } from "@/lib/firebase/config";
 import { useAuth } from "@/context/AuthContext";
 import { UserDoc, UserRole } from "@/types/user";
-import { createUserIfNotExists } from "@/services/users.service";
-
 interface UserContextValue {
   userDoc: UserDoc | null;
   role: UserRole;
@@ -27,17 +25,16 @@ export function UserProvider({ children }: { children: ReactNode }) {
       return;
     }
 
-    // Garante que o doc existe
-    createUserIfNotExists(user.uid, user.email ?? "").then(() => {
-      // Escuta mudanças em tempo real no doc do user
-      const unsub = onSnapshot(doc(db, "users", user.uid), (snap) => {
-        if (snap.exists()) {
-          setUserDoc(snap.data() as UserDoc);
-        }
-        setLoading(false);
-      });
-      return unsub;
+    // Escuta mudanças em tempo real no doc do user
+    // O doc é criado pelo AuthContext via createUserIfNotExists
+    const unsub = onSnapshot(doc(db, "users", user.uid), (snap) => {
+      if (snap.exists()) {
+        setUserDoc(snap.data() as UserDoc);
+      }
+      setLoading(false);
     });
+
+    return unsub;
   }, [user]);
 
   const role: UserRole = userDoc?.role ?? "user";

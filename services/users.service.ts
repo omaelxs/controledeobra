@@ -14,10 +14,13 @@ export async function getUser(uid: string): Promise<UserDoc | null> {
 }
 
 export async function createUserIfNotExists(uid: string, email: string): Promise<UserDoc> {
+  console.log("[AUTH DEBUG] createUserIfNotExists:", { email, ADMIN_EMAIL, match: email.toLowerCase() === ADMIN_EMAIL.toLowerCase() });
   const existing = await getUser(uid);
   if (existing) {
+    console.log("[AUTH DEBUG] existing user found:", { role: existing.role, email: existing.email });
     // Garantir que o email admin sempre tenha role admin
     if (email.toLowerCase() === ADMIN_EMAIL.toLowerCase() && existing.role !== "admin") {
+      console.log("[AUTH DEBUG] Promoting to admin!");
       await updateDoc(doc(db, COL, uid), { role: "admin" });
       return { ...existing, role: "admin" };
     }
