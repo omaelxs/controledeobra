@@ -39,7 +39,7 @@ export interface ObraFormData {
   progress: number;
 }
 
-// ── FVS ────────────────────────────────────────────────────────
+// ── FVS (legacy - mantido para compatibilidade) ────────────────
 export type FvsStatus = "andamento" | "aprovado" | "reprovado";
 
 export interface FvsItem {
@@ -66,6 +66,44 @@ export interface FvsFormData {
   category: string;
   criterio?: string;
   items: FvsItem[];
+}
+
+// ── FVS Modelos (templates criados pelo admin) ─────────────────
+export interface FvsModelo {
+  id?: string;
+  titulo: string;
+  descricao?: string;
+  codigo: string;
+  categoria: string;
+  itensVerificacao: string[];
+  criterio?: string;
+  criadoPor: string;
+  criadoEm?: string;
+}
+
+// ── FVS Aplicadas (instâncias aplicadas a apartamentos) ────────
+export type FvsAplicadaStatus = "pendente" | "preenchida" | "aprovada" | "reprovada";
+
+export interface FvsAplicadaItem {
+  texto: string;
+  conforme: boolean | null;
+  observacao?: string;
+}
+
+export interface FvsAplicada {
+  id?: string;
+  fvsModeloId: string;
+  modeloTitulo: string;
+  modeloCodigo: string;
+  obraId: string;
+  pavimentoId: string;
+  apartamentoId: string;
+  status: FvsAplicadaStatus;
+  itens: FvsAplicadaItem[];
+  preenchidoPor?: string;
+  aprovadoPor?: string;
+  dataPreenchimento?: string;
+  criadoEm?: string;
 }
 
 // ── NC ─────────────────────────────────────────────────────────

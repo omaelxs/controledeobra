@@ -262,15 +262,18 @@ export default function VistoriasPage() {
                               initial={{ opacity: 0, scale: 0.9 }}
                               animate={{ opacity: 1, scale: 1 }}
                               transition={{ duration: 0.2, delay: i * 0.03 }}
+                              whileHover={{ scale: 1.03, y: -2 }}
+                              whileTap={{ scale: 0.97 }}
                               onClick={() => openVistoria(apt)}
                               className="card"
                               style={{
                                 padding: "14px 12px", cursor: "pointer", textAlign: "center",
                                 borderColor: APT_STATUS_COLOR[apt.status],
-                                transition: "transform .1s, box-shadow .1s",
+                                boxShadow: `6px 6px 0 #000${apt.status !== "pendente" ? `, 0 0 8px ${APT_STATUS_COLOR[apt.status]}33` : ""}`,
+                                transition: "box-shadow .15s ease",
                               }}
-                              onMouseEnter={e => { e.currentTarget.style.transform = "translate(-2px,-2px)"; e.currentTarget.style.boxShadow = "8px 8px 0 #000"; }}
-                              onMouseLeave={e => { e.currentTarget.style.transform = "none"; e.currentTarget.style.boxShadow = "6px 6px 0px #000"; }}
+                              onMouseEnter={e => { e.currentTarget.style.boxShadow = `8px 8px 0 #000, 0 0 14px ${APT_STATUS_COLOR[apt.status]}55`; }}
+                              onMouseLeave={e => { e.currentTarget.style.boxShadow = `6px 6px 0 #000${apt.status !== "pendente" ? `, 0 0 8px ${APT_STATUS_COLOR[apt.status]}33` : ""}`; }}
                             >
                               <div style={{ fontSize: 11, fontWeight: 800, marginBottom: 4 }}>{apt.name}</div>
                               <span className={`pill pill-${apt.status === "aprovado" ? "green" : apt.status === "reprovado" ? "red" : "gray"}`}>

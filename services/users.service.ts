@@ -75,3 +75,16 @@ export async function changeUserRole(uid: string, newRole: UserRole, requesterRo
   }
   await updateDoc(doc(db, COL, uid), { role: newRole });
 }
+
+export async function setUserObra(uid: string, obraId: string | null, requesterRole: UserRole): Promise<void> {
+  if (requesterRole !== "admin" && requesterRole !== "dev") {
+    throw new Error("Apenas administradores podem atribuir obras");
+  }
+  if (obraId) {
+    await updateDoc(doc(db, COL, uid), { obraIdPermitida: obraId });
+  } else {
+    // Remove restriction - use deleteField
+    const { deleteField } = await import("firebase/firestore");
+    await updateDoc(doc(db, COL, uid), { obraIdPermitida: deleteField() });
+  }
+}

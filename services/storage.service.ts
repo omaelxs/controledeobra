@@ -8,7 +8,7 @@ export async function uploadProfilePhoto(uid: string, file: File): Promise<strin
     throw new Error(validation.error);
   }
 
-  const storageRef = ref(storage, `profile-photos/${uid}`);
+  const storageRef = ref(storage, `users/${uid}/profile.jpg`);
   await uploadBytes(storageRef, file);
   return getDownloadURL(storageRef);
 }

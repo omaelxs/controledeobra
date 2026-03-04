@@ -1,312 +1,662 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
-import { Fvs, FvsFormData, FvsStatus } from "@/types";
-import { getFvs, createFvs, updateFvs, deleteFvs } from "@/services/fvs.service";
+import { motion, AnimatePresence } from "framer-motion";
+import { Obra, Pavimento, Apartamento, FvsModelo, FvsAplicada, FvsAplicadaItem, FvsAplicadaStatus } from "@/types";
 import { getObras } from "@/services/obras.service";
-import { Obra } from "@/types";
+import { getFvsModelos, createFvsModelo, updateFvsModelo, deleteFvsModelo } from "@/services/fvsModelos.service";
+import { getFvsAplicadasByApt, applyModeloToApartamento, updateFvsAplicada, deleteFvsAplicada } from "@/services/fvsAplicadas.service";
+import { useAuth } from "@/context/AuthContext";
+import { useToast } from "@/context/ToastContext";
 import { useUserRole } from "@/hooks/useUserRole";
+import PageTransition from "@/components/PageTransition";
+import { SkeletonCard } from "@/components/Skeleton";
 
-const STATUS_LABEL: Record<FvsStatus, string> = { andamento: "Em Andamento", aprovado: "Aprovado", reprovado: "Reprovado" };
-const STATUS_PILL: Record<FvsStatus, string>  = { andamento: "pill-yellow", aprovado: "pill-green", reprovado: "pill-red" };
 const CATEGORIES = ["Estrutura", "Alvenaria", "Revestimento", "Pintura", "Hidráulica", "Elétrica", "Esquadrias", "Cobertura", "Fundação", "Outro"];
 
-function Modal({ title, onClose, children }: { title: string; onClose: () => void; children: React.ReactNode }) {
-  return (
-    <div onClick={e => { if (e.target === e.currentTarget) onClose(); }}
-      style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,.9)", zIndex: 999, display: "flex", alignItems: "center", justifyContent: "center", padding: 24 }}>
-      <div style={{ background: "var(--surface)", border: "2px solid var(--charcoal)", borderRadius: 12, boxShadow: "14px 14px 0 #000", padding: 34, width: 580, maxHeight: "90vh", overflowY: "auto" }}>
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 26 }}>
-          <div style={{ fontSize: 20, fontWeight: 900 }}>{title}</div>
-          <button onClick={onClose} style={{ width: 28, height: 28, background: "var(--charcoal)", border: "1px solid var(--border)", borderRadius: 6, color: "white", cursor: "pointer", fontSize: 13 }}>✕</button>
-        </div>
-        {children}
-      </div>
-    </div>
-  );
-}
+const STATUS_COLOR: Record<FvsAplicadaStatus, string> = {
+  pendente: "rgba(255,255,255,.18)",
+  preenchida: "#eab308",
+  aprovada: "#22c55e",
+  reprovada: "var(--red-accent)",
+};
+const STATUS_LABEL: Record<FvsAplicadaStatus, string> = {
+  pendente: "Pendente",
+  preenchida: "Preenchida",
+  aprovada: "Aprovada",
+  reprovada: "Reprovada",
+};
 
-const EMPTY_FORM: FvsFormData = { code: "", title: "", obraId: "", category: "Estrutura", criterio: "", items: [] };
+const APT_STATUS_COLOR: Record<string, string> = {
+  pendente: "rgba(255,255,255,.18)", aprovado: "#22c55e", reprovado: "var(--red-accent)",
+};
 
 export default function FvsPage() {
-  const { role } = useUserRole();
-  const [fvsList, setFvsList] = useState<Fvs[]>([]);
-  const [obras, setObras]     = useState<Obra[]>([]);
+  const { user } = useAuth();
+  const { addToast } = useToast();
+  const { role, isAdminOrDev } = useUserRole();
+
+  const [obras, setObras] = useState<Obra[]>([]);
+  const [modelos, setModelos] = useState<FvsModelo[]>([]);
   const [loading, setLoading] = useState(true);
-  const [filter, setFilter]   = useState<"todos" | FvsStatus>("todos");
-  const [selId, setSelId]     = useState<string | null>(null);
-  const [showForm, setShowForm] = useState(false);
-  const [editFvs, setEditFvs]  = useState<Fvs | null>(null);
-  const [form, setForm]        = useState<FvsFormData>(EMPTY_FORM);
-  const [newItem, setNewItem]  = useState("");
+  const [selObraId, setSelObraId] = useState<string | null>(null);
+  const [selPavId, setSelPavId] = useState<string | null>(null);
+
+  // Modal states
+  const [selApt, setSelApt] = useState<Apartamento | null>(null);
+  const [aptFvs, setAptFvs] = useState<FvsAplicada[]>([]);
+  const [aptFvsLoading, setAptFvsLoading] = useState(false);
+  const [showAptModal, setShowAptModal] = useState(false);
+
+  // Checklist fill modal
+  const [fillFvs, setFillFvs] = useState<FvsAplicada | null>(null);
+
+  // Apply modelo modal
+  const [showApplyModal, setShowApplyModal] = useState(false);
+
+  // Manage modelos modal
+  const [showModelosModal, setShowModelosModal] = useState(false);
+  const [modeloForm, setModeloForm] = useState({ titulo: "", codigo: "", categoria: "Estrutura", descricao: "", criterio: "", itensText: "" });
+  const [editModeloId, setEditModeloId] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
-    const [f, o] = await Promise.all([getFvs(), getObras()]);
-    setFvsList(f);
+    const [o, m] = await Promise.all([getObras(), getFvsModelos()]);
     setObras(o);
+    setModelos(m);
+    if (o.length > 0 && !selObraId) setSelObraId(o[0].id ?? null);
     setLoading(false);
   }, []);
 
   useEffect(() => { load(); }, [load]);
 
-  const filtered = filter === "todos" ? fvsList : fvsList.filter(f => f.status === filter);
-  const sel = fvsList.find(f => f.id === selId) ?? null;
+  const selObra = obras.find(o => o.id === selObraId) ?? null;
+  const pavimentos = selObra?.pavimentos ?? [];
+  const selPav = pavimentos.find(p => p.id === selPavId) ?? pavimentos[0] ?? null;
 
-  function openCreate() {
-    setEditFvs(null);
-    setForm({ ...EMPTY_FORM, code: `FVS-${String(fvsList.length + 1).padStart(3, "0")}` });
-    setShowForm(true);
-  }
-  function openEdit(f: Fvs) {
-    setEditFvs(f);
-    setForm({ code: f.code, title: f.title, obraId: f.obraId ?? "", category: f.category, criterio: f.criterio ?? "", items: f.items });
-    setShowForm(true);
+  // Open apartment → load FVS aplicadas
+  async function openApt(apt: Apartamento) {
+    if (!selObra?.id || !selPav) return;
+    setSelApt(apt);
+    setAptFvsLoading(true);
+    setShowAptModal(true);
+    setFillFvs(null);
+    const fvs = await getFvsAplicadasByApt(selObra.id, selPav.id, apt.id);
+    setAptFvs(fvs);
+    setAptFvsLoading(false);
   }
 
-  async function handleSave() {
-    if (!form.title.trim() || !form.code.trim()) return;
-    if (editFvs?.id) {
-      await updateFvs(editFvs.id, { code: form.code, title: form.title, obraId: form.obraId, category: form.category, criterio: form.criterio, items: form.items }, role);
-    } else {
-      const id = await createFvs(form, role);
-      setSelId(id);
+  // Apply a modelo
+  async function handleApplyModelo(modelo: FvsModelo) {
+    if (!selObra?.id || !selPav || !selApt) return;
+    try {
+      await applyModeloToApartamento(modelo, selObra.id, selPav.id, selApt.id);
+      addToast(`FVS "${modelo.titulo}" aplicada!`, "success");
+      setShowApplyModal(false);
+      // Reload
+      const fvs = await getFvsAplicadasByApt(selObra.id, selPav.id, selApt.id);
+      setAptFvs(fvs);
+    } catch {
+      addToast("Erro ao aplicar modelo", "error");
     }
-    setShowForm(false);
-    await load();
   }
 
-  async function handleDelete(id: string) {
-    if (!confirm("Excluir esta FVS?")) return;
-    await deleteFvs(id, role);
-    if (selId === id) setSelId(null);
-    await load();
+  // Fill FVS checklist
+  function openFill(fvs: FvsAplicada) {
+    setFillFvs({ ...fvs, itens: fvs.itens.map(i => ({ ...i })) });
   }
 
-  async function toggleItem(fvsId: string, idx: number) {
-    const fvs = fvsList.find(f => f.id === fvsId);
-    if (!fvs) return;
-    const items = fvs.items.map((it, i) => i === idx ? { ...it, checked: !it.checked } : it);
-    const checked = items.filter(i => i.checked).length;
-    const total   = items.length;
-    const newStatus: FvsStatus = total === 0 ? "andamento" : checked === total ? "aprovado" : "andamento";
-    await updateFvs(fvsId, { items, status: newStatus }, role);
-    await load();
+  function setItemConforme(idx: number, val: boolean | null) {
+    if (!fillFvs) return;
+    const itens = fillFvs.itens.map((item, i) => i === idx ? { ...item, conforme: val } : item);
+    setFillFvs({ ...fillFvs, itens });
   }
 
-  async function setStatus(id: string, status: FvsStatus) {
-    await updateFvs(id, { status }, role);
-    await load();
+  function setItemObs(idx: number, obs: string) {
+    if (!fillFvs) return;
+    const itens = fillFvs.itens.map((item, i) => i === idx ? { ...item, observacao: obs } : item);
+    setFillFvs({ ...fillFvs, itens });
   }
 
-  function addItem() {
-    if (!newItem.trim()) return;
-    setForm(p => ({ ...p, items: [...p.items, { text: newItem.trim(), checked: false }] }));
-    setNewItem("");
-  }
-  function removeItem(idx: number) {
-    setForm(p => ({ ...p, items: p.items.filter((_, i) => i !== idx) }));
+  async function saveFill() {
+    if (!fillFvs?.id || !user) return;
+    const allFilled = fillFvs.itens.every(i => i.conforme !== null);
+    const status: FvsAplicadaStatus = allFilled ? "preenchida" : "pendente";
+    try {
+      await updateFvsAplicada(fillFvs.id, {
+        itens: fillFvs.itens,
+        status,
+        preenchidoPor: user.uid,
+        dataPreenchimento: new Date().toISOString(),
+      });
+      addToast("FVS salva!", "success");
+      setFillFvs(null);
+      if (selObra?.id && selPav && selApt) {
+        const fvs = await getFvsAplicadasByApt(selObra.id, selPav.id, selApt.id);
+        setAptFvs(fvs);
+      }
+    } catch {
+      addToast("Erro ao salvar", "error");
+    }
   }
 
-  const obraName = (id?: string) => obras.find(o => o.id === id)?.name ?? "—";
+  async function handleApproveFvs(fvsId: string, approve: boolean) {
+    if (!user) return;
+    try {
+      await updateFvsAplicada(fvsId, {
+        status: approve ? "aprovada" : "reprovada",
+        aprovadoPor: user.uid,
+      });
+      addToast(approve ? "FVS aprovada!" : "FVS reprovada!", approve ? "success" : "warning");
+      if (selObra?.id && selPav && selApt) {
+        const fvs = await getFvsAplicadasByApt(selObra.id, selPav.id, selApt.id);
+        setAptFvs(fvs);
+      }
+    } catch {
+      addToast("Erro ao aprovar/reprovar", "error");
+    }
+  }
+
+  async function handleDeleteFvsAplicada(id: string) {
+    if (!confirm("Excluir esta FVS aplicada?")) return;
+    try {
+      await deleteFvsAplicada(id);
+      setAptFvs(prev => prev.filter(f => f.id !== id));
+      addToast("FVS excluída", "success");
+    } catch {
+      addToast("Erro ao excluir", "error");
+    }
+  }
+
+  // ── Modelos CRUD ──
+  function openCreateModelo() {
+    setEditModeloId(null);
+    setModeloForm({ titulo: "", codigo: `FVS-${String(modelos.length + 1).padStart(3, "0")}`, categoria: "Estrutura", descricao: "", criterio: "", itensText: "" });
+  }
+  function openEditModelo(m: FvsModelo) {
+    setEditModeloId(m.id!);
+    setModeloForm({ titulo: m.titulo, codigo: m.codigo, categoria: m.categoria, descricao: m.descricao ?? "", criterio: m.criterio ?? "", itensText: m.itensVerificacao.join("\n") });
+  }
+  async function saveModelo() {
+    if (!modeloForm.titulo.trim() || !modeloForm.codigo.trim()) return;
+    const itensVerificacao = modeloForm.itensText.split("\n").map(s => s.trim()).filter(Boolean);
+    try {
+      if (editModeloId) {
+        await updateFvsModelo(editModeloId, { titulo: modeloForm.titulo, codigo: modeloForm.codigo, categoria: modeloForm.categoria, descricao: modeloForm.descricao || undefined, criterio: modeloForm.criterio || undefined, itensVerificacao }, role);
+      } else {
+        await createFvsModelo({ titulo: modeloForm.titulo, codigo: modeloForm.codigo, categoria: modeloForm.categoria, descricao: modeloForm.descricao || undefined, criterio: modeloForm.criterio || undefined, itensVerificacao, criadoPor: user!.uid }, role);
+      }
+      addToast(editModeloId ? "Modelo atualizado!" : "Modelo criado!", "success");
+      const m = await getFvsModelos();
+      setModelos(m);
+      setEditModeloId(null);
+      setModeloForm({ titulo: "", codigo: "", categoria: "Estrutura", descricao: "", criterio: "", itensText: "" });
+    } catch {
+      addToast("Erro ao salvar modelo", "error");
+    }
+  }
+  async function handleDeleteModelo(id: string) {
+    if (!confirm("Excluir modelo?")) return;
+    try {
+      await deleteFvsModelo(id, role);
+      setModelos(prev => prev.filter(m => m.id !== id));
+      addToast("Modelo excluído", "success");
+    } catch {
+      addToast("Erro ao excluir", "error");
+    }
+  }
 
   return (
-    <div style={{ flex: 1, overflowY: "auto", padding: "36px 40px 48px" }}>
-      {/* Header */}
-      <div style={{ display: "flex", alignItems: "flex-end", justifyContent: "space-between", marginBottom: 30 }}>
-        <div>
-          <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: ".22em", textTransform: "uppercase", color: "var(--red-accent)", marginBottom: 6 }}>Qualidade</div>
-          <div style={{ fontSize: 52, fontWeight: 900, letterSpacing: "-.025em", lineHeight: 1 }}>FVS — Fichas</div>
-          <div style={{ fontSize: 13, color: "var(--muted)", marginTop: 6 }}>Fichas de Verificação de Serviço</div>
-        </div>
-        <button className="btn-primary" onClick={openCreate}>+ Nova FVS</button>
-      </div>
-
-      {/* Filtros */}
-      <div style={{ display: "flex", gap: 8, marginBottom: 26 }}>
-        {(["todos", "andamento", "aprovado", "reprovado"] as const).map(f => (
-          <button key={f} onClick={() => setFilter(f)} style={{
-            padding: "6px 16px", fontSize: 10, fontWeight: 700, letterSpacing: ".1em", textTransform: "uppercase",
-            background: filter === f ? "var(--red-accent)" : "var(--charcoal)",
-            border: `1px solid ${filter === f ? "var(--red-accent)" : "rgba(255,255,255,.1)"}`,
-            borderRadius: 6, color: filter === f ? "#fff" : "rgba(255,255,255,.5)", cursor: "pointer", fontFamily: "inherit",
-          }}>
-            {f === "todos" ? "Todos" : STATUS_LABEL[f]}
-            <span style={{ marginLeft: 6, fontSize: 9, opacity: .7 }}>
-              {f === "todos" ? fvsList.length : fvsList.filter(x => x.status === f).length}
-            </span>
-          </button>
-        ))}
-      </div>
-
-      {/* Modal */}
-      {showForm && (
-        <Modal title={editFvs ? "Editar FVS" : "Nova FVS"} onClose={() => setShowForm(false)}>
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14, marginBottom: 14 }}>
-            <div>
-              <label className="form-label">Código</label>
-              <input className="form-input" value={form.code} onChange={e => setForm(p => ({ ...p, code: e.target.value }))} placeholder="FVS-001" />
-            </div>
-            <div>
-              <label className="form-label">Categoria</label>
-              <select className="form-select" value={form.category} onChange={e => setForm(p => ({ ...p, category: e.target.value }))}>
-                {CATEGORIES.map(c => <option key={c}>{c}</option>)}
-              </select>
-            </div>
+    <PageTransition>
+      <div style={{ flex: 1, overflowY: "auto", padding: "36px 40px 48px" }} className="dot-grid">
+        {/* Header */}
+        <div style={{ display: "flex", alignItems: "flex-end", justifyContent: "space-between", marginBottom: 28 }}>
+          <div>
+            <div className="section-label" style={{ marginBottom: 6 }}>QUALIDADE</div>
+            <h1 style={{ fontSize: 26, fontWeight: 900, letterSpacing: "-.02em" }}>FVS — Fichas de Verificação</h1>
+            <div style={{ fontSize: 12, color: "rgba(255,255,255,.35)", marginTop: 4 }}>Selecione um apartamento para gerenciar as fichas</div>
           </div>
-          <div style={{ marginBottom: 14 }}>
-            <label className="form-label">Título</label>
-            <input className="form-input" value={form.title} onChange={e => setForm(p => ({ ...p, title: e.target.value }))} placeholder="Ex: Verificação de Fôrmas" />
-          </div>
-          <div style={{ marginBottom: 14 }}>
-            <label className="form-label">Obra Vinculada</label>
-            <select className="form-select" value={form.obraId ?? ""} onChange={e => setForm(p => ({ ...p, obraId: e.target.value }))}>
-              <option value="">— Sem vínculo —</option>
-              {obras.map(o => <option key={o.id} value={o.id}>{o.name}</option>)}
-            </select>
-          </div>
-          <div style={{ marginBottom: 18 }}>
-            <label className="form-label">Critério de Aceitação</label>
-            <textarea className="form-textarea" rows={2} value={form.criterio ?? ""} onChange={e => setForm(p => ({ ...p, criterio: e.target.value }))} placeholder="Descreva o critério de aprovação..." />
-          </div>
-          <div style={{ marginBottom: 18 }}>
-            <label className="form-label">Itens de Verificação</label>
-            <div style={{ marginBottom: 8 }}>
-              {form.items.map((item, i) => (
-                <div key={i} style={{ display: "flex", alignItems: "center", gap: 8, padding: "6px 10px", background: "rgba(255,255,255,.025)", borderRadius: 6, marginBottom: 4 }}>
-                  <div style={{ width: 14, height: 14, borderRadius: 3, border: "1px solid var(--border)", background: "var(--charcoal)", flexShrink: 0 }} />
-                  <span style={{ flex: 1, fontSize: 12 }}>{item.text}</span>
-                  <button onClick={() => removeItem(i)} style={{ width: 18, height: 18, background: "rgba(164,22,26,.2)", border: "none", borderRadius: 3, color: "var(--red-accent)", cursor: "pointer", fontSize: 10, display: "flex", alignItems: "center", justifyContent: "center" }}>✕</button>
-                </div>
-              ))}
-              {form.items.length === 0 && <div style={{ fontSize: 11, color: "var(--muted)", padding: "6px 0" }}>Nenhum item. Adicione abaixo.</div>}
-            </div>
-            <div style={{ display: "flex", gap: 8 }}>
-              <input className="form-input" style={{ flex: 1 }} value={newItem} onChange={e => setNewItem(e.target.value)}
-                onKeyDown={e => e.key === "Enter" && addItem()} placeholder="Novo item de verificação..." />
-              <button className="btn-ghost" onClick={addItem}>+ Add</button>
-            </div>
-          </div>
-          <div style={{ display: "flex", gap: 10, justifyContent: "flex-end", paddingTop: 18, borderTop: "1px solid var(--border)" }}>
-            <button className="btn-ghost" onClick={() => setShowForm(false)}>Cancelar</button>
-            <button className="btn-primary" onClick={handleSave}>{editFvs ? "Salvar" : "Criar FVS"}</button>
-          </div>
-        </Modal>
-      )}
-
-      {/* Layout */}
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 380px", gap: 20, minHeight: 480 }}>
-        {/* Cards */}
-        <div>
-          {loading && <div style={{ color: "var(--muted)", fontSize: 13 }}>Carregando...</div>}
-          {!loading && filtered.length === 0 && (
-            <div style={{ background: "var(--surface)", border: "2px solid var(--charcoal)", borderRadius: 12, padding: "56px 0", textAlign: "center", color: "var(--muted)" }}>
-              <div style={{ fontSize: 32, opacity: .18, marginBottom: 10 }}>📋</div>
-              <div style={{ fontSize: 13, color: "rgba(255,255,255,.3)" }}>Nenhuma ficha encontrada</div>
-            </div>
+          {isAdminOrDev && (
+            <button className="btn-primary" onClick={() => setShowModelosModal(true)}>Gerenciar Modelos</button>
           )}
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(300px, 1fr))", gap: 16 }}>
-            {filtered.map(fvs => {
-              const total   = fvs.items.length;
-              const checked = fvs.items.filter(i => i.checked).length;
-              const pct     = total > 0 ? Math.round((checked / total) * 100) : 0;
-              const active  = selId === fvs.id;
-              return (
-                <div key={fvs.id} onClick={() => setSelId(active ? null : fvs.id!)} style={{
-                  background: "var(--surface)", border: `2px solid ${active ? "var(--red-accent)" : "var(--charcoal)"}`,
-                  borderRadius: 12, boxShadow: "6px 6px 0 #000", padding: "22px 20px", cursor: "pointer",
-                }}>
-                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 10 }}>
-                    <div>
-                      <div style={{ fontSize: 9, fontWeight: 700, letterSpacing: ".18em", textTransform: "uppercase", color: "var(--muted)", marginBottom: 4 }}>{fvs.code} · {fvs.category}</div>
-                      <div style={{ fontSize: 15, fontWeight: 800 }}>{fvs.title}</div>
-                    </div>
-                    <span className={`pill ${STATUS_PILL[fvs.status]}`}>{STATUS_LABEL[fvs.status]}</span>
+        </div>
+
+        {loading && (
+          <div style={{ display: "grid", gridTemplateColumns: "240px 1fr", gap: 20 }}>
+            <SkeletonCard /><SkeletonCard />
+          </div>
+        )}
+
+        {!loading && obras.length === 0 && (
+          <div className="card" style={{ padding: 56, textAlign: "center" }}>
+            <div style={{ fontSize: 13, color: "rgba(255,255,255,.3)" }}>Cadastre obras com pavimentos e apartamentos</div>
+          </div>
+        )}
+
+        {!loading && obras.length > 0 && (
+          <>
+            {/* Obra tabs */}
+            <div style={{ display: "flex", gap: 6, marginBottom: 20, flexWrap: "wrap" }}>
+              {obras.map(o => (
+                <button key={o.id} onClick={() => { setSelObraId(o.id!); setSelPavId(null); }} style={{
+                  padding: "5px 14px", fontSize: 9, fontWeight: 800, letterSpacing: ".12em", textTransform: "uppercase",
+                  background: selObraId === o.id ? "var(--red-accent)" : "var(--charcoal)",
+                  border: `1.5px solid ${selObraId === o.id ? "var(--red-accent)" : "rgba(255,255,255,.08)"}`,
+                  color: selObraId === o.id ? "#fff" : "rgba(255,255,255,.4)", cursor: "pointer", fontFamily: "inherit",
+                  boxShadow: selObraId === o.id ? "3px 3px 0 #000" : "none",
+                }}>{o.name}</button>
+              ))}
+            </div>
+
+            {selObra && (
+              <div style={{ display: "grid", gridTemplateColumns: "240px 1fr", gap: 20 }}>
+                {/* Sidebar pavimentos */}
+                <div className="card" style={{ overflow: "hidden" }}>
+                  <div style={{ padding: "14px 16px", borderBottom: "2px solid #000" }}>
+                    <div className="section-label">Pavimentos</div>
                   </div>
-                  {fvs.obraId && <div style={{ fontSize: 10, color: "var(--muted)", marginBottom: 10 }}>📍 {obraName(fvs.obraId)}</div>}
-                  {total > 0 && (
-                    <div style={{ marginBottom: 10 }}>
-                      <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 4 }}>
-                        <span style={{ fontSize: 9, color: "var(--muted)" }}>Itens verificados</span>
-                        <span style={{ fontSize: 9, fontWeight: 800 }}>{checked}/{total}</span>
+                  <div style={{ padding: 6 }}>
+                    {pavimentos.length === 0 && (
+                      <div style={{ padding: 20, fontSize: 11, color: "rgba(255,255,255,.25)", textAlign: "center" }}>Nenhum</div>
+                    )}
+                    {pavimentos.map(pav => {
+                      const active = selPav?.id === pav.id || (!selPavId && pav.id === pavimentos[0]?.id);
+                      return (
+                        <div key={pav.id} onClick={() => setSelPavId(pav.id)} style={{
+                          padding: "10px 12px", cursor: "pointer", marginBottom: 2,
+                          borderLeft: `3px solid ${active ? "var(--red-accent)" : "transparent"}`,
+                          background: active ? "var(--charcoal)" : "transparent",
+                        }}>
+                          <div style={{ fontSize: 12, fontWeight: 700, marginBottom: 4 }}>{pav.name}</div>
+                          <div style={{ fontSize: 9, color: "rgba(255,255,255,.3)" }}>{pav.apts.length} apts</div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                {/* Apartment grid */}
+                <div className="card" style={{ overflow: "hidden" }}>
+                  {!selPav ? (
+                    <div style={{ display: "flex", alignItems: "center", justifyContent: "center", height: 200, color: "rgba(255,255,255,.25)", fontSize: 12 }}>
+                      Selecione um pavimento
+                    </div>
+                  ) : (
+                    <>
+                      <div style={{ padding: "16px 20px", borderBottom: "2px solid #000", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                        <div>
+                          <div className="section-label" style={{ marginBottom: 2 }}>Pavimento</div>
+                          <div style={{ fontSize: 16, fontWeight: 900 }}>{selPav.name}</div>
+                        </div>
+                        <div style={{ fontSize: 10, color: "rgba(255,255,255,.3)" }}>{selPav.apts.length} apartamentos</div>
                       </div>
-                      <div className="stat-bar"><div className="stat-bar-fill" style={{ width: `${pct}%` }} /></div>
+                      <div style={{ padding: "18px 20px" }}>
+                        {selPav.apts.length === 0 && (
+                          <div style={{ textAlign: "center", padding: 40, color: "rgba(255,255,255,.25)", fontSize: 12 }}>Nenhum apartamento</div>
+                        )}
+                        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(130px, 1fr))", gap: 10 }}>
+                          {selPav.apts.map((apt, i) => (
+                            <motion.div
+                              key={apt.id}
+                              initial={{ opacity: 0, scale: 0.9 }}
+                              animate={{ opacity: 1, scale: 1 }}
+                              transition={{ duration: 0.2, delay: i * 0.03 }}
+                              whileHover={{ scale: 1.03, y: -2 }}
+                              whileTap={{ scale: 0.97 }}
+                              onClick={() => openApt(apt)}
+                              className="card"
+                              style={{
+                                padding: "14px 12px", cursor: "pointer", textAlign: "center",
+                                borderColor: APT_STATUS_COLOR[apt.status],
+                                boxShadow: `6px 6px 0 #000${apt.status !== "pendente" ? `, 0 0 8px ${APT_STATUS_COLOR[apt.status]}33` : ""}`,
+                                transition: "box-shadow .15s ease",
+                              }}
+                              onMouseEnter={e => { e.currentTarget.style.boxShadow = `8px 8px 0 #000, 0 0 14px ${APT_STATUS_COLOR[apt.status]}55`; }}
+                              onMouseLeave={e => { e.currentTarget.style.boxShadow = `6px 6px 0 #000${apt.status !== "pendente" ? `, 0 0 8px ${APT_STATUS_COLOR[apt.status]}33` : ""}`; }}
+                            >
+                              <div style={{ fontSize: 11, fontWeight: 800, marginBottom: 4 }}>{apt.name}</div>
+                              <span className={`pill pill-${apt.status === "aprovado" ? "green" : apt.status === "reprovado" ? "red" : "gray"}`}>
+                                <span className="pill-dot" />{apt.status}
+                              </span>
+                            </motion.div>
+                          ))}
+                        </div>
+                      </div>
+                    </>
+                  )}
+                </div>
+              </div>
+            )}
+          </>
+        )}
+
+        {/* ══════ MODAL: FVS do Apartamento ══════ */}
+        <AnimatePresence>
+          {showAptModal && selApt && (
+            <motion.div
+              onClick={e => { if (e.target === e.currentTarget) { setShowAptModal(false); setFillFvs(null); } }}
+              initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+              style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,.88)", zIndex: 9998, display: "flex", alignItems: "center", justifyContent: "center", padding: 24 }}
+            >
+              <motion.div
+                initial={{ scale: 0.92, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.95, opacity: 0 }}
+                transition={{ duration: 0.2, ease: [0.175, 0.885, 0.32, 1.275] }}
+                style={{ background: "var(--surface)", border: "2px solid var(--border-hard)", boxShadow: "10px 10px 0 #000", width: 650, maxHeight: "90vh", overflow: "hidden", display: "flex", flexDirection: "column" }}
+              >
+                {/* Header */}
+                <div style={{ padding: "20px 24px", borderBottom: "2px solid #000", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                  <div>
+                    <div className="section-label" style={{ marginBottom: 4 }}>FVS — {selApt.name}</div>
+                    <div style={{ fontSize: 16, fontWeight: 900 }}>Fichas de Verificação</div>
+                  </div>
+                  <div style={{ display: "flex", gap: 8 }}>
+                    <button className="btn-primary" onClick={() => setShowApplyModal(true)} style={{ fontSize: 10, padding: "6px 14px" }}>+ Aplicar Modelo</button>
+                    <button onClick={() => { setShowAptModal(false); setFillFvs(null); }} style={{
+                      width: 28, height: 28, background: "var(--charcoal)", border: "2px solid #000",
+                      boxShadow: "2px 2px 0 #000", color: "white", cursor: "pointer", fontSize: 12, fontWeight: 900,
+                    }}>✕</button>
+                  </div>
+                </div>
+
+                <div style={{ flex: 1, overflowY: "auto" }}>
+                  <AnimatePresence mode="wait">
+                    {fillFvs ? (
+                      /* ── Checklist Fill View ── */
+                      <motion.div key="fill" initial={{ x: "100%", opacity: 0 }} animate={{ x: 0, opacity: 1 }} exit={{ x: "100%", opacity: 0 }} transition={{ duration: 0.3, ease: [0.4, 0, 0.2, 1] }}
+                        style={{ padding: "20px 24px" }}>
+                        <button onClick={() => setFillFvs(null)} style={{
+                          display: "flex", alignItems: "center", gap: 6, marginBottom: 16,
+                          background: "none", border: "none", cursor: "pointer",
+                          fontSize: 10, fontWeight: 800, color: "var(--red-accent)",
+                          letterSpacing: ".1em", textTransform: "uppercase", fontFamily: "inherit",
+                        }}>
+                          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M15 18l-6-6 6-6" strokeLinecap="square"/></svg>
+                          Voltar
+                        </button>
+
+                        <div style={{ fontSize: 16, fontWeight: 900, marginBottom: 2 }}>{fillFvs.modeloTitulo}</div>
+                        <div className="section-label" style={{ marginBottom: 16 }}>{fillFvs.modeloCodigo}</div>
+
+                        <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                          {fillFvs.itens.map((item, i) => (
+                            <div key={i} style={{
+                              padding: "10px 14px",
+                              background: item.conforme === true ? "rgba(34,197,94,.08)" : item.conforme === false ? "rgba(164,22,26,.08)" : "var(--charcoal)",
+                              borderLeft: `3px solid ${item.conforme === true ? "#22c55e" : item.conforme === false ? "var(--red-accent)" : "rgba(255,255,255,.1)"}`,
+                            }}>
+                              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 4 }}>
+                                <span style={{ fontSize: 12, fontWeight: 600, color: "rgba(255,255,255,.75)" }}>{item.texto}</span>
+                                <div style={{ display: "flex", gap: 4 }}>
+                                  {([true, null, false] as const).map(val => {
+                                    const active = item.conforme === val;
+                                    const label = val === true ? "C" : val === false ? "NC" : "—";
+                                    const color = val === true ? "#22c55e" : val === false ? "var(--red-accent)" : "rgba(255,255,255,.3)";
+                                    return (
+                                      <button key={String(val)} onClick={() => setItemConforme(i, val)} style={{
+                                        padding: "3px 10px", fontSize: 8, fontWeight: 800, letterSpacing: ".08em",
+                                        background: active ? `${color}22` : "var(--charcoal)",
+                                        border: `1.5px solid ${active ? color : "rgba(255,255,255,.06)"}`,
+                                        color: active ? color : "rgba(255,255,255,.25)",
+                                        cursor: "pointer", fontFamily: "inherit",
+                                        boxShadow: active ? "2px 2px 0 #000" : "none",
+                                      }}>{label}</button>
+                                    );
+                                  })}
+                                </div>
+                              </div>
+                              {item.conforme === false && (
+                                <input
+                                  className="form-input"
+                                  style={{ marginTop: 6, fontSize: 10, padding: "4px 8px" }}
+                                  value={item.observacao ?? ""}
+                                  onChange={e => setItemObs(i, e.target.value)}
+                                  placeholder="Observação da não conformidade..."
+                                />
+                              )}
+                            </div>
+                          ))}
+                        </div>
+
+                        <div style={{ display: "flex", gap: 10, paddingTop: 18, marginTop: 16, borderTop: "2px solid #000" }}>
+                          <button className="btn-ghost" onClick={() => setFillFvs(null)} style={{ flex: 1 }}>Cancelar</button>
+                          <button className="btn-primary" onClick={saveFill} style={{ flex: 1 }}>Salvar</button>
+                        </div>
+                      </motion.div>
+                    ) : (
+                      /* ── FVS List View ── */
+                      <motion.div key="list" initial={{ x: "-100%", opacity: 0 }} animate={{ x: 0, opacity: 1 }} exit={{ x: "-100%", opacity: 0 }} transition={{ duration: 0.3, ease: [0.4, 0, 0.2, 1] }}
+                        style={{ padding: "20px 24px" }}>
+                        {aptFvsLoading && <div style={{ fontSize: 12, color: "rgba(255,255,255,.3)", padding: 20, textAlign: "center" }}>Carregando...</div>}
+
+                        {!aptFvsLoading && aptFvs.length === 0 && (
+                          <div style={{ textAlign: "center", padding: 40, color: "rgba(255,255,255,.25)" }}>
+                            <div style={{ fontSize: 12, marginBottom: 8 }}>Nenhuma FVS aplicada a este apartamento</div>
+                            <div style={{ fontSize: 10 }}>Clique em "Aplicar Modelo" para adicionar</div>
+                          </div>
+                        )}
+
+                        <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                          {aptFvs.map((fvs, i) => {
+                            const filled = fvs.itens.filter(it => it.conforme !== null).length;
+                            const total = fvs.itens.length;
+                            const pct = total > 0 ? Math.round((filled / total) * 100) : 0;
+                            return (
+                              <motion.div
+                                key={fvs.id}
+                                initial={{ opacity: 0, x: -16 }}
+                                animate={{ opacity: 1, x: 0 }}
+                                transition={{ duration: 0.2, delay: i * 0.05 }}
+                                style={{
+                                  padding: "14px 18px",
+                                  background: `${STATUS_COLOR[fvs.status]}11`,
+                                  border: `2px solid ${STATUS_COLOR[fvs.status]}`,
+                                  boxShadow: "4px 4px 0 #000",
+                                }}
+                              >
+                                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 8 }}>
+                                  <div>
+                                    <div style={{ fontSize: 9, fontWeight: 700, letterSpacing: ".15em", textTransform: "uppercase", color: "rgba(255,255,255,.4)", marginBottom: 2 }}>{fvs.modeloCodigo}</div>
+                                    <div style={{ fontSize: 13, fontWeight: 800, color: "rgba(255,255,255,.85)" }}>{fvs.modeloTitulo}</div>
+                                  </div>
+                                  <span className={`pill pill-${fvs.status === "aprovada" ? "green" : fvs.status === "reprovada" ? "red" : fvs.status === "preenchida" ? "yellow" : "gray"}`}>
+                                    {STATUS_LABEL[fvs.status]}
+                                  </span>
+                                </div>
+
+                                {total > 0 && (
+                                  <div style={{ marginBottom: 10 }}>
+                                    <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 4 }}>
+                                      <span style={{ fontSize: 9, color: "rgba(255,255,255,.3)" }}>Preenchimento</span>
+                                      <span style={{ fontSize: 9, fontWeight: 800 }}>{filled}/{total} ({pct}%)</span>
+                                    </div>
+                                    <div className="stat-bar"><div className="stat-bar-fill" style={{ width: `${pct}%` }} /></div>
+                                  </div>
+                                )}
+
+                                <div style={{ display: "flex", gap: 6 }}>
+                                  <button onClick={() => openFill(fvs)} style={{
+                                    flex: 1, fontSize: 9, padding: "5px 0", fontWeight: 700,
+                                    background: "var(--charcoal)", border: "1px solid rgba(255,255,255,.1)",
+                                    color: "rgba(255,255,255,.7)", cursor: "pointer", fontFamily: "inherit",
+                                  }}>Preencher</button>
+                                  {isAdminOrDev && fvs.status === "preenchida" && (
+                                    <>
+                                      <button onClick={() => handleApproveFvs(fvs.id!, true)} style={{
+                                        flex: 1, fontSize: 9, padding: "5px 0", fontWeight: 700,
+                                        background: "rgba(34,197,94,.15)", border: "1px solid rgba(34,197,94,.3)",
+                                        color: "#22c55e", cursor: "pointer", fontFamily: "inherit",
+                                      }}>Aprovar</button>
+                                      <button onClick={() => handleApproveFvs(fvs.id!, false)} style={{
+                                        flex: 1, fontSize: 9, padding: "5px 0", fontWeight: 700,
+                                        background: "rgba(164,22,26,.15)", border: "1px solid rgba(164,22,26,.3)",
+                                        color: "var(--red-accent)", cursor: "pointer", fontFamily: "inherit",
+                                      }}>Reprovar</button>
+                                    </>
+                                  )}
+                                  {isAdminOrDev && (
+                                    <button onClick={() => handleDeleteFvsAplicada(fvs.id!)} style={{
+                                      fontSize: 9, padding: "5px 10px", fontWeight: 700,
+                                      background: "rgba(164,22,26,.1)", border: "1px solid rgba(164,22,26,.2)",
+                                      color: "var(--red-accent)", cursor: "pointer", fontFamily: "inherit",
+                                    }}>✕</button>
+                                  )}
+                                </div>
+                              </motion.div>
+                            );
+                          })}
+                        </div>
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
+                </div>
+              </motion.div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+
+        {/* ══════ MODAL: Aplicar Modelo ══════ */}
+        <AnimatePresence>
+          {showApplyModal && (
+            <motion.div
+              onClick={e => { if (e.target === e.currentTarget) setShowApplyModal(false); }}
+              initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+              style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,.88)", zIndex: 9999, display: "flex", alignItems: "center", justifyContent: "center", padding: 24 }}
+            >
+              <motion.div
+                initial={{ scale: 0.92, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.95, opacity: 0 }}
+                style={{ background: "var(--surface)", border: "2px solid var(--border-hard)", boxShadow: "10px 10px 0 #000", width: 480, maxHeight: "80vh", overflow: "hidden", display: "flex", flexDirection: "column" }}
+              >
+                <div style={{ padding: "20px 24px", borderBottom: "2px solid #000", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                  <div style={{ fontSize: 16, fontWeight: 900 }}>Aplicar Modelo FVS</div>
+                  <button onClick={() => setShowApplyModal(false)} style={{ width: 28, height: 28, background: "var(--charcoal)", border: "2px solid #000", boxShadow: "2px 2px 0 #000", color: "white", cursor: "pointer", fontSize: 12, fontWeight: 900 }}>✕</button>
+                </div>
+                <div style={{ flex: 1, overflowY: "auto", padding: "16px 24px" }}>
+                  {modelos.length === 0 && (
+                    <div style={{ textAlign: "center", padding: 30, color: "rgba(255,255,255,.25)", fontSize: 12 }}>
+                      Nenhum modelo criado. Peça ao admin para criar modelos.
                     </div>
                   )}
-                  <div style={{ display: "flex", gap: 6 }} onClick={e => e.stopPropagation()}>
-                    <button onClick={() => openEdit(fvs)} style={{ flex: 1, fontSize: 9, padding: "4px 0", background: "var(--charcoal)", border: "1px solid rgba(255,255,255,.1)", borderRadius: 5, color: "rgba(255,255,255,.7)", cursor: "pointer", fontFamily: "inherit" }}>Editar</button>
-                    <button onClick={() => handleDelete(fvs.id!)} style={{ flex: 1, fontSize: 9, padding: "4px 0", background: "rgba(164,22,26,.12)", border: "1px solid rgba(164,22,26,.25)", borderRadius: 5, color: "var(--red-accent)", cursor: "pointer", fontFamily: "inherit" }}>Excluir</button>
+                  <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                    {modelos.map(m => (
+                      <div key={m.id} onClick={() => handleApplyModelo(m)} style={{
+                        padding: "14px 16px", cursor: "pointer",
+                        background: "var(--charcoal)", border: "2px solid rgba(255,255,255,.08)",
+                        boxShadow: "4px 4px 0 #000",
+                        transition: "transform .1s, box-shadow .1s",
+                      }}
+                        onMouseEnter={e => { e.currentTarget.style.transform = "translate(-2px,-2px)"; e.currentTarget.style.boxShadow = "6px 6px 0 #000"; }}
+                        onMouseLeave={e => { e.currentTarget.style.transform = "none"; e.currentTarget.style.boxShadow = "4px 4px 0 #000"; }}
+                      >
+                        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                          <div>
+                            <div style={{ fontSize: 9, fontWeight: 700, letterSpacing: ".15em", color: "rgba(255,255,255,.35)", marginBottom: 2 }}>{m.codigo} · {m.categoria}</div>
+                            <div style={{ fontSize: 13, fontWeight: 800 }}>{m.titulo}</div>
+                          </div>
+                          <div style={{ fontSize: 9, color: "rgba(255,255,255,.3)" }}>{m.itensVerificacao.length} itens</div>
+                        </div>
+                      </div>
+                    ))}
                   </div>
                 </div>
-              );
-            })}
-          </div>
-        </div>
-
-        {/* Painel lateral */}
-        <div style={{ background: "var(--surface)", border: "2px solid var(--charcoal)", borderRadius: 12, boxShadow: "6px 6px 0 #000", overflow: "hidden", display: "flex", flexDirection: "column", minHeight: 480 }}>
-          {!sel ? (
-            <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", flex: 1, color: "var(--muted)", gap: 8 }}>
-              <div style={{ fontSize: 28, opacity: .18 }}>📋</div>
-              <div style={{ fontSize: 12, color: "rgba(255,255,255,.3)" }}>Clique em uma ficha para ver detalhes</div>
-            </div>
-          ) : (
-            <>
-              <div style={{ padding: "20px 22px 16px", borderBottom: "1px solid var(--border)" }}>
-                <div style={{ fontSize: 9, color: "var(--muted)", fontWeight: 700, letterSpacing: ".15em", textTransform: "uppercase", marginBottom: 4 }}>{sel.code}</div>
-                <div style={{ fontSize: 18, fontWeight: 900, marginBottom: 8 }}>{sel.title}</div>
-                <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-                  <span className={`pill ${STATUS_PILL[sel.status]}`}>{STATUS_LABEL[sel.status]}</span>
-                  <span style={{ fontSize: 9, background: "var(--charcoal)", borderRadius: 999, padding: "2px 9px", color: "rgba(255,255,255,.5)" }}>{sel.category}</span>
-                </div>
-              </div>
-              {sel.criterio && (
-                <div style={{ padding: "14px 22px", borderBottom: "1px solid var(--border)" }}>
-                  <div style={{ fontSize: 9, fontWeight: 700, letterSpacing: ".15em", textTransform: "uppercase", color: "var(--muted)", marginBottom: 6 }}>Critério</div>
-                  <div style={{ fontSize: 11.5, color: "rgba(255,255,255,.6)", lineHeight: 1.6 }}>{sel.criterio}</div>
-                </div>
-              )}
-              <div style={{ flex: 1, overflowY: "auto", padding: "14px 22px" }}>
-                <div style={{ fontSize: 9, fontWeight: 700, letterSpacing: ".15em", textTransform: "uppercase", color: "var(--muted)", marginBottom: 12 }}>
-                  Checklist ({sel.items.filter(i => i.checked).length}/{sel.items.length})
-                </div>
-                {sel.items.length === 0 && <div style={{ fontSize: 11, color: "var(--muted)" }}>Nenhum item cadastrado.</div>}
-                {sel.items.map((item, i) => (
-                  <div key={i} onClick={() => toggleItem(sel.id!, i)} style={{
-                    display: "flex", alignItems: "center", gap: 10, padding: "8px 10px", borderRadius: 7, marginBottom: 3, cursor: "pointer",
-                    background: item.checked ? "rgba(34,197,94,.07)" : "transparent",
-                  }}
-                    onMouseEnter={e => { if (!item.checked) e.currentTarget.style.background = "rgba(255,255,255,.025)"; }}
-                    onMouseLeave={e => { e.currentTarget.style.background = item.checked ? "rgba(34,197,94,.07)" : "transparent"; }}>
-                    <div style={{
-                      width: 16, height: 16, borderRadius: 4, flexShrink: 0,
-                      border: `2px solid ${item.checked ? "#22c55e" : "rgba(255,255,255,.2)"}`,
-                      background: item.checked ? "#22c55e" : "transparent",
-                      display: "flex", alignItems: "center", justifyContent: "center",
-                    }}>
-                      {item.checked && <span style={{ fontSize: 9, color: "#000", fontWeight: 900 }}>✓</span>}
-                    </div>
-                    <span style={{ fontSize: 12, color: item.checked ? "rgba(255,255,255,.5)" : "rgba(255,255,255,.8)", textDecoration: item.checked ? "line-through" : "none" }}>{item.text}</span>
-                  </div>
-                ))}
-              </div>
-              <div style={{ padding: "12px 22px", borderTop: "1px solid var(--border)", display: "flex", gap: 6 }}>
-                {(["andamento", "aprovado", "reprovado"] as FvsStatus[]).map(st => (
-                  <button key={st} onClick={() => setStatus(sel.id!, st)} style={{
-                    flex: 1, fontSize: 8, fontWeight: 700, letterSpacing: ".08em", textTransform: "uppercase", padding: "5px 0",
-                    background: sel.status === st ? (st === "aprovado" ? "rgba(34,197,94,.2)" : st === "reprovado" ? "rgba(164,22,26,.2)" : "rgba(234,179,8,.2)") : "var(--charcoal)",
-                    border: `1px solid ${sel.status === st ? (st === "aprovado" ? "rgba(34,197,94,.4)" : st === "reprovado" ? "rgba(164,22,26,.4)" : "rgba(234,179,8,.4)") : "rgba(255,255,255,.08)"}`,
-                    borderRadius: 5, color: sel.status === st ? (st === "aprovado" ? "#22c55e" : st === "reprovado" ? "var(--red-accent)" : "#eab308") : "rgba(255,255,255,.45)",
-                    cursor: "pointer", fontFamily: "inherit",
-                  }}>
-                    {STATUS_LABEL[st]}
-                  </button>
-                ))}
-              </div>
-            </>
+              </motion.div>
+            </motion.div>
           )}
-        </div>
+        </AnimatePresence>
+
+        {/* ══════ MODAL: Gerenciar Modelos (admin) ══════ */}
+        <AnimatePresence>
+          {showModelosModal && (
+            <motion.div
+              onClick={e => { if (e.target === e.currentTarget) setShowModelosModal(false); }}
+              initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+              style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,.88)", zIndex: 9999, display: "flex", alignItems: "center", justifyContent: "center", padding: 24 }}
+            >
+              <motion.div
+                initial={{ scale: 0.92, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.95, opacity: 0 }}
+                style={{ background: "var(--surface)", border: "2px solid var(--border-hard)", boxShadow: "10px 10px 0 #000", width: 600, maxHeight: "90vh", overflow: "hidden", display: "flex", flexDirection: "column" }}
+              >
+                <div style={{ padding: "20px 24px", borderBottom: "2px solid #000", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                  <div style={{ fontSize: 16, fontWeight: 900 }}>Modelos FVS</div>
+                  <div style={{ display: "flex", gap: 8 }}>
+                    <button className="btn-primary" onClick={openCreateModelo} style={{ fontSize: 10, padding: "6px 14px" }}>+ Novo Modelo</button>
+                    <button onClick={() => setShowModelosModal(false)} style={{ width: 28, height: 28, background: "var(--charcoal)", border: "2px solid #000", boxShadow: "2px 2px 0 #000", color: "white", cursor: "pointer", fontSize: 12, fontWeight: 900 }}>✕</button>
+                  </div>
+                </div>
+
+                <div style={{ flex: 1, overflowY: "auto", padding: "16px 24px" }}>
+                  {/* Form */}
+                  {(modeloForm.titulo || editModeloId !== null) && (
+                    <div style={{ marginBottom: 20, padding: 16, background: "var(--charcoal)", border: "2px solid rgba(255,255,255,.08)" }}>
+                      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 10 }}>
+                        <div>
+                          <label className="form-label">Código</label>
+                          <input className="form-input" value={modeloForm.codigo} onChange={e => setModeloForm(p => ({ ...p, codigo: e.target.value }))} placeholder="FVS-001" />
+                        </div>
+                        <div>
+                          <label className="form-label">Categoria</label>
+                          <select className="form-select" value={modeloForm.categoria} onChange={e => setModeloForm(p => ({ ...p, categoria: e.target.value }))}>
+                            {CATEGORIES.map(c => <option key={c}>{c}</option>)}
+                          </select>
+                        </div>
+                      </div>
+                      <div style={{ marginBottom: 10 }}>
+                        <label className="form-label">Título</label>
+                        <input className="form-input" value={modeloForm.titulo} onChange={e => setModeloForm(p => ({ ...p, titulo: e.target.value }))} placeholder="Ex: Verificação de Fôrmas" />
+                      </div>
+                      <div style={{ marginBottom: 10 }}>
+                        <label className="form-label">Critério de Aceitação</label>
+                        <textarea className="form-textarea" rows={2} value={modeloForm.criterio} onChange={e => setModeloForm(p => ({ ...p, criterio: e.target.value }))} placeholder="Critério..." />
+                      </div>
+                      <div style={{ marginBottom: 10 }}>
+                        <label className="form-label">Itens de Verificação (um por linha)</label>
+                        <textarea className="form-textarea" rows={4} value={modeloForm.itensText} onChange={e => setModeloForm(p => ({ ...p, itensText: e.target.value }))} placeholder={"Fundações\nPilares\nVigas\nLajes"} />
+                      </div>
+                      <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
+                        <button className="btn-ghost" onClick={() => { setEditModeloId(null); setModeloForm({ titulo: "", codigo: "", categoria: "Estrutura", descricao: "", criterio: "", itensText: "" }); }}>Cancelar</button>
+                        <button className="btn-primary" onClick={saveModelo}>{editModeloId ? "Salvar" : "Criar"}</button>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* List */}
+                  {modelos.length === 0 && !modeloForm.titulo && (
+                    <div style={{ textAlign: "center", padding: 30, color: "rgba(255,255,255,.25)", fontSize: 12 }}>
+                      Nenhum modelo. Clique em "+ Novo Modelo" para criar.
+                    </div>
+                  )}
+                  <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                    {modelos.map(m => (
+                      <div key={m.id} style={{
+                        padding: "14px 16px", background: "var(--charcoal)", border: "2px solid rgba(255,255,255,.06)", boxShadow: "4px 4px 0 #000",
+                      }}>
+                        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                          <div>
+                            <div style={{ fontSize: 9, fontWeight: 700, letterSpacing: ".15em", color: "rgba(255,255,255,.35)", marginBottom: 2 }}>{m.codigo} · {m.categoria}</div>
+                            <div style={{ fontSize: 13, fontWeight: 800 }}>{m.titulo}</div>
+                            <div style={{ fontSize: 9, color: "rgba(255,255,255,.25)", marginTop: 2 }}>{m.itensVerificacao.length} itens</div>
+                          </div>
+                          <div style={{ display: "flex", gap: 6 }}>
+                            <button onClick={() => openEditModelo(m)} style={{
+                              fontSize: 9, padding: "4px 10px", fontWeight: 700,
+                              background: "var(--surface)", border: "1px solid rgba(255,255,255,.1)",
+                              color: "rgba(255,255,255,.6)", cursor: "pointer", fontFamily: "inherit",
+                            }}>Editar</button>
+                            <button onClick={() => handleDeleteModelo(m.id!)} style={{
+                              fontSize: 9, padding: "4px 10px", fontWeight: 700,
+                              background: "rgba(164,22,26,.1)", border: "1px solid rgba(164,22,26,.2)",
+                              color: "var(--red-accent)", cursor: "pointer", fontFamily: "inherit",
+                            }}>Excluir</button>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </motion.div>
+            </motion.div>
+          )}
+        </AnimatePresence>
       </div>
-    </div>
+    </PageTransition>
   );
 }

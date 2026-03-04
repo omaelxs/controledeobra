@@ -158,6 +158,12 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
     .filter(g => !g.adminOnly || isAdminOrDev)
     .map(g => ({ ...g, items: g.items.filter(i => !i.adminOnly || isAdminOrDev) }));
 
+  // Fix: selecionar apenas UMA aba ativa (a mais específica)
+  const allNavItems = filteredNav.flatMap(g => g.items);
+  const activeHref = allNavItems
+    .filter(i => pathname === i.href || pathname.startsWith(i.href + "/"))
+    .sort((a, b) => b.href.length - a.href.length)[0]?.href ?? null;
+
   return (
     <ToastProvider>
     <ObrasProvider>
@@ -220,16 +226,20 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
                   color: group.adminOnly ? "rgba(229,56,59,.35)" : "rgba(255,255,255,.22)", padding: "18px 20px 6px",
                 }}>{group.section}</div>
                 {group.items.map(item => {
-                  const active = pathname === item.href || pathname.startsWith(item.href + "/");
+                  const active = item.href === activeHref;
                   return (
                     <Link key={item.href} href={item.href} style={{
                       position: "relative", display: "flex", alignItems: "center", gap: 10,
                       padding: "10px 20px", fontSize: 12, fontWeight: active ? 700 : 500,
                       color: active ? "#fff" : "rgba(255,255,255,.45)",
                       background: active ? "var(--charcoal)" : "transparent",
-                      textDecoration: "none", transition: "all .1s",
+                      textDecoration: "none", transition: "all .15s ease",
                       borderLeft: active ? "3px solid var(--red-accent)" : "3px solid transparent",
-                    }}>
+                      transformOrigin: "left center",
+                    }}
+                    onMouseEnter={e => { if (!active) { e.currentTarget.style.transform = "scale(1.04)"; e.currentTarget.style.background = "rgba(255,255,255,.04)"; }}}
+                    onMouseLeave={e => { if (!active) { e.currentTarget.style.transform = "scale(1)"; e.currentTarget.style.background = "transparent"; }}}
+                    >
                       <span style={{ color: active ? "var(--red-accent)" : "rgba(255,255,255,.3)" }}>
                         {item.icon}
                       </span>

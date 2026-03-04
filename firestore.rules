@@ -28,14 +28,14 @@ service cloud.firestore {
         request.resource.data.diff(resource.data).affectedKeys()
           .hasOnly(['displayName', 'photoURL', 'online', 'lastSeen']);
 
-      // Only admin can change roles (NEVER allow user to promote themselves)
+      // Only admin can change roles and obra assignment
       allow update: if isAdminOrDev() &&
         request.resource.data.diff(resource.data).affectedKeys()
-          .hasOnly(['role']);
+          .hasOnly(['role', 'obraIdPermitida']);
 
       // Auto-create on first login
       allow create: if isOwner(uid) &&
-        request.resource.data.role == 'user'; // Default role is 'user'
+        request.resource.data.role in ['user', 'admin'];
     }
 
     // ── Obras ──
@@ -50,10 +50,24 @@ service cloud.firestore {
       }
     }
 
-    // ── FVS ──
+    // ── FVS (legacy) ──
     match /fvs/{fvsId} {
       allow read: if isAuth();
       allow create, update, delete: if isAdminOrDev();
+    }
+
+    // ── FVS Modelos (templates) ──
+    match /fvsModelos/{modeloId} {
+      allow read: if isAuth();
+      allow create, update, delete: if isAdminOrDev();
+    }
+
+    // ── FVS Aplicadas (instâncias) ──
+    match /fvsAplicadas/{aplicadaId} {
+      allow read: if isAuth();
+      allow create: if isAuth();
+      allow update: if isAuth();
+      allow delete: if isAdminOrDev();
     }
 
     // ── NC ──

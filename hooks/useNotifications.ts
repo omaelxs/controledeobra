@@ -12,6 +12,12 @@ export function useNotifications(limitCount: number = 30) {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    if (!user) {
+      setNotifications([]);
+      setLoading(false);
+      return;
+    }
+
     const q = query(
       collection(db, "notifications"),
       orderBy("createdAt", "desc"),
@@ -24,7 +30,7 @@ export function useNotifications(limitCount: number = 30) {
     });
 
     return unsub;
-  }, [limitCount]);
+  }, [user?.uid, limitCount]);
 
   const unreadCount = user
     ? notifications.filter(n => !n.readBy.includes(user.uid)).length

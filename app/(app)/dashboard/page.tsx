@@ -3,40 +3,65 @@
 import { useState, useEffect } from "react";
 import { motion } from "framer-motion";
 import { useObras } from "@/hooks/useObras";
-import { getFvs } from "@/services/fvs.service";
-import { getNCs } from "@/services/nc.service";
-import { getResponsaveis } from "@/services/responsaveis.service";
-import { getRecentLogs } from "@/services/logs.service";
 import { useOnlineUsers } from "@/hooks/useOnlineUsers";
-import { LogDoc } from "@/types/log";
+import { getFvsAplicadas } from "@/services/fvsAplicadas.service";
+import { getVistorias } from "@/services/vistorias.service";
+import { getNCs } from "@/services/nc.service";
 import PageTransition from "@/components/PageTransition";
-
-const ACTION_COLOR: Record<string, string> = {
-  login: "#63b3ed", logout: "rgba(255,255,255,.3)", create: "#22c55e",
-  update: "#eab308", delete: "var(--red-accent)", pdf_generated: "#a78bfa",
-};
 
 export default function DashboardPage() {
   const { obras } = useObras();
   const { onlineCount } = useOnlineUsers();
-  const [fvsCount, setFvsCount]       = useState(0);
-  const [ncCount, setNcCount]         = useState(0);
-  const [rtCount, setRtCount]         = useState(0);
-  const [fvsAndamento, setFvsAndamento] = useState(0);
-  const [logs, setLogs]               = useState<LogDoc[]>([]);
+  const [fvsTotal, setFvsTotal] = useState(0);
+  const [fvsConcluidas, setFvsConcluidas] = useState(0);
+  const [vistTotal, setVistTotal] = useState(0);
+  const [vistConcluidas, setVistConcluidas] = useState(0);
+  const [ncAbertas, setNcAbertas] = useState(0);
 
   useEffect(() => {
-    getFvs().then(f => { setFvsCount(f.length); setFvsAndamento(f.filter(x => x.status === "andamento").length); });
-    getNCs().then(n => setNcCount(n.filter(x => x.status === "open").length));
-    getResponsaveis().then(r => setRtCount(r.length));
-    getRecentLogs(10).then(setLogs);
-  }, []);
+    async function loadStats() {
+      // Load FVS and vistorias stats for all obras the user can see
+      let fT = 0, fC = 0, vT = 0, vC = 0;
+      for (const obra of obras) {
+        if (!obra.id) continue;
+        try {
+          const fvs = await getFvsAplicadas(obra.id);
+          fT += fvs.length;
+          fC += fvs.filter(f => f.status === "aprovada").length;
+        } catch { /* empty */ }
+      }
+      setFvsTotal(fT);
+      setFvsConcluidas(fC);
+
+      try {
+        const vist = await getVistorias();
+        const filteredVist = obras.length > 0
+          ? vist.filter(v => obras.some(o => o.id === v.obraId))
+          : vist;
+        vT = filteredVist.length;
+        vC = filteredVist.filter(v => v.status === "aprovado").length;
+      } catch { /* empty */ }
+      setVistTotal(vT);
+      setVistConcluidas(vC);
+
+      try {
+        const ncs = await getNCs();
+        setNcAbertas(ncs.filter(n => n.status === "open").length);
+      } catch { /* empty */ }
+    }
+
+    if (obras.length > 0) loadStats();
+  }, [obras]);
+
+  const fvsPct = fvsTotal > 0 ? Math.round((fvsConcluidas / fvsTotal) * 100) : 0;
+  const vistPct = vistTotal > 0 ? Math.round((vistConcluidas / vistTotal) * 100) : 0;
 
   const stats = [
-    { label: "Obras Ativas",  value: obras.length, note: "Cadastradas no sistema",       crit: false },
-    { label: "Fichas FVS",    value: fvsCount,      note: `${fvsAndamento} em andamento`, crit: false },
-    { label: "NCs Abertas",   value: ncCount,       note: "Pendentes de resolução",      crit: ncCount > 0 },
-    { label: "Online Agora",  value: onlineCount,   note: "Usuários conectados",          crit: false },
+    { label: "FVS Concluídas", value: `${fvsPct}%`, sub: `${fvsConcluidas}/${fvsTotal} aprovadas`, pct: fvsPct, color: "#22c55e", crit: false },
+    { label: "Vistorias Concluídas", value: `${vistPct}%`, sub: `${vistConcluidas}/${vistTotal} aprovadas`, pct: vistPct, color: "#3b82f6", crit: false },
+    { label: "Online Agora", value: String(onlineCount), sub: "Usuários conectados", pct: Math.min(onlineCount * 20, 100), color: "#a78bfa", crit: false },
+    { label: "Obra Atual", value: String(obras.length), sub: obras.length > 0 ? obras[0].name : "Nenhuma", pct: 100, color: "rgba(255,255,255,.3)", crit: false },
+    { label: "Alertas Críticos", value: String(ncAbertas), sub: "NCs abertas pendentes", pct: Math.min(ncAbertas * 25, 100), color: "var(--red-accent)", crit: ncAbertas > 0 },
   ];
 
   return (
@@ -45,11 +70,10 @@ export default function DashboardPage() {
         <div style={{ marginBottom: 32 }}>
           <div className="section-label" style={{ marginBottom: 6 }}>VISÃO GERAL</div>
           <h1 style={{ fontSize: 26, fontWeight: 900, letterSpacing: "-.02em" }}>Painel Geral</h1>
-          <div style={{ fontSize: 12, color: "rgba(255,255,255,.35)", marginTop: 4 }}>Monitoramento centralizado de obras, qualidade e equipe</div>
+          <div style={{ fontSize: 12, color: "rgba(255,255,255,.35)", marginTop: 4 }}>Métricas consolidadas das suas obras</div>
         </div>
 
-        {/* Stats */}
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: 16, marginBottom: 24 }}>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: 16 }}>
           {stats.map((s, i) => (
             <motion.div
               key={s.label}
@@ -57,92 +81,33 @@ export default function DashboardPage() {
               initial={{ opacity: 0, y: 16 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.3, delay: i * 0.06 }}
+              whileHover={{ scale: 1.02, y: -2 }}
               style={{
                 padding: "22px 20px",
                 borderColor: s.crit ? "rgba(164,22,26,.45)" : undefined,
+                boxShadow: s.crit ? "6px 6px 0 #000, 0 0 12px rgba(164,22,26,.2)" : undefined,
               }}
             >
               <div className="section-label" style={{ marginBottom: 10 }}>{s.label}</div>
-              <div style={{ fontSize: 42, fontWeight: 900, letterSpacing: "-.03em", lineHeight: 1, color: s.crit ? "var(--red-accent)" : "var(--white)" }}>{s.value}</div>
-              <div className="stat-bar" style={{ marginTop: 12 }}>
-                <div className="stat-bar-fill" style={{ width: `${Math.min(s.value * 10, 100)}%` }} />
+              <div style={{
+                fontSize: 42, fontWeight: 900, letterSpacing: "-.03em", lineHeight: 1,
+                color: s.crit ? "var(--red-accent)" : "var(--white)",
+              }}>
+                {s.value}
               </div>
-              <div style={{ fontSize: 10, color: "rgba(255,255,255,.25)", marginTop: 8 }}>{s.note}</div>
+              <div style={{
+                marginTop: 12, height: 4, background: "rgba(255,255,255,.06)", overflow: "hidden",
+              }}>
+                <motion.div
+                  initial={{ width: 0 }}
+                  animate={{ width: `${s.pct}%` }}
+                  transition={{ duration: 0.8, delay: 0.3 + i * 0.1, ease: [0.4, 0, 0.2, 1] }}
+                  style={{ height: "100%", background: s.color }}
+                />
+              </div>
+              <div style={{ fontSize: 10, color: "rgba(255,255,255,.25)", marginTop: 8 }}>{s.sub}</div>
             </motion.div>
           ))}
-        </div>
-
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
-          {/* Obras */}
-          <motion.div
-            className="card"
-            initial={{ opacity: 0, y: 16 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.3, delay: 0.25 }}
-            style={{ padding: "22px 20px" }}
-          >
-            <div className="section-label" style={{ marginBottom: 16 }}>OBRAS EM ANDAMENTO</div>
-            {obras.length === 0 ? (
-              <div style={{ textAlign: "center", padding: 24, color: "rgba(255,255,255,.2)", fontSize: 11 }}>Nenhuma obra cadastrada</div>
-            ) : (
-              <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-                {obras.slice(0, 5).map(o => (
-                  <div key={o.id} style={{ display: "flex", alignItems: "center", gap: 14 }}>
-                    <div style={{ flex: 1 }}>
-                      <div style={{ fontSize: 12, fontWeight: 700, marginBottom: 4 }}>{o.name}</div>
-                      <div className="stat-bar"><div className="stat-bar-fill" style={{ width: `${o.progress ?? 0}%` }} /></div>
-                    </div>
-                    <div style={{ fontSize: 11, fontWeight: 800, color: "rgba(255,255,255,.4)", minWidth: 32, textAlign: "right" }}>{o.progress ?? 0}%</div>
-                  </div>
-                ))}
-              </div>
-            )}
-          </motion.div>
-
-          {/* Activity */}
-          <motion.div
-            className="card"
-            initial={{ opacity: 0, y: 16 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.3, delay: 0.3 }}
-            style={{ padding: "22px 20px" }}
-          >
-            <div className="section-label" style={{ marginBottom: 16 }}>ATIVIDADE RECENTE</div>
-            {logs.length === 0 ? (
-              <div style={{ textAlign: "center", padding: 24, color: "rgba(255,255,255,.2)", fontSize: 11 }}>Nenhuma atividade registrada</div>
-            ) : (
-              <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-                {logs.map((log, i) => (
-                  <motion.div
-                    key={log.id ?? i}
-                    initial={{ opacity: 0, x: -8 }}
-                    animate={{ opacity: 1, x: 0 }}
-                    transition={{ duration: 0.15, delay: i * 0.03 }}
-                    style={{
-                      display: "flex", alignItems: "center", gap: 10,
-                      padding: "6px 10px",
-                      borderLeft: `3px solid ${ACTION_COLOR[log.action] || "rgba(255,255,255,.1)"}`,
-                      background: i % 2 === 0 ? "rgba(255,255,255,.02)" : "transparent",
-                    }}
-                  >
-                    <span style={{
-                      fontSize: 7, fontWeight: 800, letterSpacing: ".08em", textTransform: "uppercase",
-                      color: ACTION_COLOR[log.action] || "rgba(255,255,255,.3)",
-                      width: 45, flexShrink: 0,
-                    }}>
-                      {log.action}
-                    </span>
-                    <span style={{ fontSize: 10, color: "rgba(255,255,255,.5)", flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                      {log.details || log.target}
-                    </span>
-                    <span style={{ fontSize: 7, color: "rgba(255,255,255,.15)", flexShrink: 0 }}>
-                      {log.userEmail?.split("@")[0]}
-                    </span>
-                  </motion.div>
-                ))}
-              </div>
-            )}
-          </motion.div>
         </div>
       </div>
     </PageTransition>

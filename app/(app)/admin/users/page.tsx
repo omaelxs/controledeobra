@@ -2,7 +2,9 @@
 
 import { useEffect, useState } from "react";
 import { motion } from "framer-motion";
-import { getAllUsers, changeUserRole } from "@/services/users.service";
+import { getAllUsers, changeUserRole, setUserObra } from "@/services/users.service";
+import { getObras } from "@/services/obras.service";
+import { Obra } from "@/types";
 import { UserDoc, UserRole } from "@/types/user";
 import { useToast } from "@/context/ToastContext";
 import { createLog } from "@/services/logs.service";
@@ -19,10 +21,15 @@ export default function AdminUsersPage() {
   const { role } = useUserRole();
   const { addToast } = useToast();
   const [users, setUsers] = useState<UserDoc[]>([]);
+  const [obras, setObras] = useState<Obra[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    getAllUsers().then(u => { setUsers(u); setLoading(false); });
+    Promise.all([getAllUsers(), getObras()]).then(([u, o]) => {
+      setUsers(u);
+      setObras(o);
+      setLoading(false);
+    });
   }, []);
 
   async function handleRoleChange(target: UserDoc, newRole: UserRole) {
@@ -41,6 +48,19 @@ export default function AdminUsersPage() {
       addToast(`Role de ${target.displayName} alterada para ${newRole}`, "success");
     } catch {
       addToast("Erro ao alterar role.", "error");
+    }
+  }
+
+  async function handleObraChange(target: UserDoc, obraId: string) {
+    if (!user) return;
+    try {
+      const value = obraId === "" ? null : obraId;
+      await setUserObra(target.uid, value, role);
+      setUsers(prev => prev.map(u => u.uid === target.uid ? { ...u, obraIdPermitida: value ?? undefined } : u));
+      const obraName = obraId ? obras.find(o => o.id === obraId)?.name ?? obraId : "Todas";
+      addToast(`Obra de ${target.displayName}: ${obraName}`, "success");
+    } catch {
+      addToast("Erro ao atribuir obra.", "error");
     }
   }
 
@@ -102,6 +122,19 @@ export default function AdminUsersPage() {
                       </div>
                       <div style={{ fontSize: 10, color: "rgba(255,255,255,.3)", marginTop: 2 }}>{u.email}</div>
                     </div>
+
+                    {/* Obra select */}
+                    <select
+                      value={u.obraIdPermitida ?? ""}
+                      onChange={e => handleObraChange(u, e.target.value)}
+                      className="form-select"
+                      style={{ width: 120, padding: "6px 10px", fontSize: 10, fontWeight: 700 }}
+                    >
+                      <option value="">Todas obras</option>
+                      {obras.map(o => (
+                        <option key={o.id} value={o.id!}>{o.name}</option>
+                      ))}
+                    </select>
 
                     {/* Role select */}
                     <select

@@ -24,6 +24,18 @@ export function canAccessAdmin(role: UserRole): boolean {
   return isAdminOrDev(role);
 }
 
+export function canManageModelos(role: UserRole): boolean {
+  return isAdminOrDev(role);
+}
+
+export function canFillFvs(_role: UserRole): boolean {
+  return true;
+}
+
+export function canApproveFvs(role: UserRole): boolean {
+  return isAdminOrDev(role);
+}
+
 export function assertPermission(role: UserRole | undefined, action: "create" | "edit" | "delete") {
   if (!role) throw new Error("Usuário não autenticado");
   const checks = { create: canCreate, edit: canEdit, delete: canDelete };

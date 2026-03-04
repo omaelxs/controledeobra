@@ -11,16 +11,22 @@ import {
 import { useUserRole } from "@/hooks/useUserRole";
 
 export function useObras() {
-  const { role } = useUserRole();
+  const { role, userDoc } = useUserRole();
   const [obras, setObras] = useState<Obra[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+
+  const obraIdPermitida = userDoc?.obraIdPermitida;
+  const isRestricted = !!obraIdPermitida && role === "user";
 
   const fetchObras = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
-      const data = await getObras();
+      let data = await getObras();
+      if (isRestricted) {
+        data = data.filter(o => o.id === obraIdPermitida);
+      }
       setObras(data);
     } catch (err) {
       setError("Erro ao carregar obras.");
@@ -28,7 +34,7 @@ export function useObras() {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [isRestricted, obraIdPermitida]);
 
   useEffect(() => {
     fetchObras();

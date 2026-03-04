@@ -9,4 +9,5 @@ export interface UserDoc {
   online: boolean;
   lastSeen: string;
   createdAt: string;
+  obraIdPermitida?: string;
 }
