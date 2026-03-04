@@ -9,7 +9,7 @@ import { getAllUsers } from "@/services/users.service";
 import { getResponsaveis } from "@/services/responsaveis.service";
 import { getRecentLogs } from "@/services/logs.service";
 import { UserDoc } from "@/types/user";
-import { Responsavel } from "@/types/responsavel";
+import { Responsavel } from "@/types";
 import { LogDoc } from "@/types/log";
 
 const MENU_CARDS = [
@@ -215,7 +215,7 @@ export default function AdminPage() {
               <h2 style={{ fontSize: 14, fontWeight: 700, marginBottom: 16 }}>
                 📋 Últimas Ações do Sistema
               </h2>
-              <div style={{ fontSize: 12, space: 8 }}>
+              <div style={{ fontSize: 12 }}>
                 {stats.recentLogs.map((log, i) => (
                   <motion.div
                     key={log.id}

@@ -8,7 +8,7 @@ import { AdminForm, FormField } from "@/components/AdminForm";
 import { useUserRole } from "@/hooks/useUserRole";
 import { useToast } from "@/hooks/useToast";
 import { getResponsaveis, createResponsavel, updateResponsavel, deleteResponsavel } from "@/services/responsaveis.service";
-import { Responsavel, CARGO_LABELS } from "@/types/responsavel";
+import { Responsavel, CARGO_LABELS } from "@/types";
 
 const CARGO_OPTIONS = Object.entries(CARGO_LABELS).map(([value, label]) => ({
   value,
@@ -21,7 +21,7 @@ export default function ResponsaveisPage() {
   const [showForm, setShowForm] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editingData, setEditingData] = useState<Partial<Responsavel> | null>(null);
-  const { role, user } = useUserRole();
+  const { role, userDoc } = useUserRole();
   const { showToast } = useToast();
 
   useEffect(() => {
@@ -42,7 +42,7 @@ export default function ResponsaveisPage() {
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    if (!role || !user) return;
+    if (!role || !userDoc) return;
 
     try {
       const form = e.target as HTMLFormElement;
@@ -50,17 +50,17 @@ export default function ResponsaveisPage() {
 
       const data = {
         nome: formData.get("nome") as string,
-        cargo: formData.get("cargo") as string,
+        cargo: formData.get("cargo") as import("@/types").RtTipo,
         crea: formData.get("crea") as string || undefined,
-        telefone: formData.get("telefone") as string || undefined,
+        telefone: formData.get("tel") as string || undefined,
         email: formData.get("email") as string || undefined,
       };
 
       if (editingId) {
-        await updateResponsavel(editingId, data, role, user.uid, user.email);
+        await updateResponsavel(editingId, data, role, userDoc?.uid, userDoc?.email);
         showToast("Responsável atualizado com sucesso", "success");
       } else {
-        await createResponsavel(data, role, user.uid, user.email);
+        await createResponsavel(data, role, userDoc?.uid, userDoc?.email);
         showToast("Responsável criado com sucesso", "success");
       }
 
@@ -80,10 +80,10 @@ export default function ResponsaveisPage() {
   }
 
   async function handleDelete(id: string) {
-    if (!role || !user || !confirm("Tem certeza que quer deletar?")) return;
+    if (!role || !userDoc || !confirm("Tem certeza que quer deletar?")) return;
 
     try {
-      await deleteResponsavel(id, role, user.uid, user.email);
+      await deleteResponsavel(id, role, userDoc?.uid, userDoc?.email);
       showToast("Responsável deletado com sucesso", "success");
       await loadResponsaveis();
     } catch (error: any) {
@@ -148,7 +148,7 @@ export default function ResponsaveisPage() {
                   render: (value) => value || "-",
                 },
                 {
-                  key: "telefone",
+                  key: "tel",
                   label: "Telefone",
                   width: "15%",
                   render: (value) => value || "-",
@@ -220,9 +220,9 @@ export default function ResponsaveisPage() {
             />
             <FormField
               label="Telefone"
-              name="telefone"
+              name="tel"
               placeholder="(XX) XXXXX-XXXX (opcional)"
-              defaultValue={editingData?.telefone || ""}
+              defaultValue={editingData?.tel || ""}
             />
           </AdminForm>
         )}

@@ -75,14 +75,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   async function login(email: string, password: string) {
     const cred = await signInWithEmailAndPassword(auth, email, password);
-    // Log de login
-    await createLog({
-      userId: cred.user.uid,
-      userEmail: cred.user.email ?? "",
-      action: "login",
-      target: "session",
-      details: "Login realizado",
-    });
+    // Log de login (não bloqueia o login se falhar)
+    try {
+      await createLog({
+        userId: cred.user.uid,
+        userEmail: cred.user.email ?? "",
+        action: "login",
+        target: "session",
+        details: "Login realizado",
+      });
+    } catch (e) {
+      console.error("Erro ao registrar log de login:", e);
+    }
   }
 
   async function logout() {

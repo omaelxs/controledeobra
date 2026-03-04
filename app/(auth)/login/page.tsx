@@ -26,8 +26,20 @@ export default function LoginPage() {
     try {
       await login(email, password);
       router.push("/dashboard");
-    } catch {
-      setError("Email ou senha inválidos.");
+    } catch (err: any) {
+      const code = err?.code || "";
+      console.error("Login error:", code, err?.message);
+      if (code === "auth/user-not-found" || code === "auth/invalid-credential") {
+        setError("Usuário não encontrado. Verifique o email.");
+      } else if (code === "auth/wrong-password") {
+        setError("Senha incorreta.");
+      } else if (code === "auth/invalid-email") {
+        setError("Email inválido.");
+      } else if (code === "auth/too-many-requests") {
+        setError("Muitas tentativas. Aguarde alguns minutos.");
+      } else {
+        setError(`Erro ao fazer login: ${code || err?.message || "desconhecido"}`);
+      }
     } finally {
       setLoading(false);
     }

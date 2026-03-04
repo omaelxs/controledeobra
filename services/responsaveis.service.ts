@@ -73,8 +73,8 @@ export async function updateResponsavel(
   id: string,
   data: Partial<Responsavel>,
   role: UserRole,
-  userId: string,
-  userEmail: string
+  userId: string = "",
+  userEmail: string = ""
 ): Promise<void> {
   assertPermission(role, "edit");
   await updateDoc(doc(db, COL, id), data);
@@ -96,8 +96,8 @@ export async function updateResponsavel(
 export async function deleteResponsavel(
   id: string,
   role: UserRole,
-  userId: string,
-  userEmail: string
+  userId: string = "",
+  userEmail: string = ""
 ): Promise<void> {
   assertPermission(role, "delete");
 

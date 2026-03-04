@@ -33,6 +33,10 @@ export class CacheManager<T> {
     return entry.data;
   }
 
+  delete(key: string): void {
+    this.cache.delete(key);
+  }
+
   clear(): void {
     this.cache.clear();
   }
@@ -66,7 +70,7 @@ export class QueryOptimizer {
   }
 
   invalidate(key: string): void {
-    this.cache.cache.delete(key);
+    this.cache.delete(key);
   }
 
   invalidateAll(): void {

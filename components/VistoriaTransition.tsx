@@ -19,7 +19,7 @@ interface VistoriaTransitionProps {
   onPhotoRemove: (itemId: string, photoId: string) => void;
 }
 
-const EASING = "cubic-bezier(0.4, 0, 0.2, 1)"; // Material Design motion curve
+const EASING = [0.4, 0, 0.2, 1] as const; // Material Design motion curve
 const ANIMATION_DURATION = 0.35; // 350ms
 
 const STATUS_COLORS: Record<ScopeStatus, { bg: string; border: string; color: string }> = {

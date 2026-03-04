@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
-import { Responsavel, ResponsavelFormData, RtTipo } from "@/types";
+import { Responsavel, ResponsavelFormData, RtTipo, CARGO_LABELS } from "@/types";
 import { getResponsaveis, createResponsavel, updateResponsavel, deleteResponsavel } from "@/services/responsaveis.service";
 import { useAuth } from "@/context/AuthContext";
 import { useUserRole } from "@/hooks/useUserRole";
@@ -14,7 +14,7 @@ const TIPOS: { value: RtTipo; label: string }[] = [
   { value: "fiscal",     label: "Fiscal" },
   { value: "outro",      label: "Outro" },
 ];
-const TIPO_LABEL: Record<RtTipo, string> = Object.fromEntries(TIPOS.map(t => [t.value, t.label])) as Record<RtTipo, string>;
+// Removido: TIPO_LABEL
 
 function Modal({ title, onClose, children }: { title: string; onClose: () => void; children: React.ReactNode }) {
   return (
@@ -31,7 +31,7 @@ function Modal({ title, onClose, children }: { title: string; onClose: () => voi
   );
 }
 
-const EMPTY: ResponsavelFormData = { nome: "", cargo: "", tipo: "eng", crea: "", tel: "", email: "" };
+const EMPTY: ResponsavelFormData = { nome: "", cargo: "eng", crea: "", tel: "", email: "" };
 
 function initials(name: string) {
   const parts = name.trim().split(" ");
@@ -59,21 +59,21 @@ export default function ResponsaveisPage() {
   function openCreate() { setEditRt(null); setForm(EMPTY); setShowForm(true); }
   function openEdit(r: Responsavel) {
     setEditRt(r);
-    setForm({ nome: r.nome, cargo: r.cargo, tipo: r.tipo, crea: r.crea ?? "", tel: r.tel ?? "", email: r.email ?? "" });
+    setForm({ nome: r.nome, cargo: r.cargo, crea: r.crea ?? "", tel: r.tel ?? "", email: r.email ?? "" });
     setShowForm(true);
   }
 
   async function handleSave() {
     if (!form.nome.trim()) return;
-    if (editRt?.id) await updateResponsavel(editRt.id, form, role);
-    else await createResponsavel(form, role);
+    if (editRt?.id) await updateResponsavel(editRt.id, form, role, user?.uid ?? "", user?.email ?? "");
+    else await createResponsavel(form, role, user?.uid ?? "", user?.email ?? "");
     setShowForm(false);
     await load();
   }
 
   async function handleDelete(id: string) {
     if (!confirm("Excluir este responsável?")) return;
-    await deleteResponsavel(id, role);
+    await deleteResponsavel(id, role, user?.uid ?? "", user?.email ?? "");
     await load();
   }
 
@@ -98,17 +98,11 @@ export default function ResponsaveisPage() {
             <label className="form-label">Nome Completo</label>
             <input className="form-input" value={form.nome} onChange={e => setForm(p => ({ ...p, nome: e.target.value }))} placeholder="Ex: João da Silva" />
           </div>
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14, marginBottom: 14 }}>
-            <div>
-              <label className="form-label">Cargo</label>
-              <input className="form-input" value={form.cargo} onChange={e => setForm(p => ({ ...p, cargo: e.target.value }))} placeholder="Ex: Engenheiro Civil" />
-            </div>
-            <div>
-              <label className="form-label">Tipo</label>
-              <select className="form-select" value={form.tipo} onChange={e => setForm(p => ({ ...p, tipo: e.target.value as RtTipo }))}>
-                {TIPOS.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
-              </select>
-            </div>
+          <div style={{ marginBottom: 14 }}>
+            <label className="form-label">Cargo</label>
+            <select className="form-select" value={form.cargo} onChange={e => setForm(p => ({ ...p, cargo: e.target.value as RtTipo }))}>
+              {TIPOS.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
+            </select>
           </div>
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14, marginBottom: 14 }}>
             <div>
@@ -151,7 +145,7 @@ export default function ResponsaveisPage() {
             <div style={{ position: "absolute", top: 0, left: 0, right: 0, height: 2, background: "var(--charcoal)" }} />
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 14 }}>
               <div style={{ fontSize: 8, fontWeight: 800, letterSpacing: ".12em", textTransform: "uppercase", color: "rgba(255,255,255,.35)", padding: "3px 8px", border: "1px solid rgba(255,255,255,.08)", display: "inline-block" }}>
-                {TIPO_LABEL[r.tipo] ?? r.tipo}
+                {CARGO_LABELS[r.cargo]}
               </div>
             </div>
             <div style={{ width: 48, height: 48, background: "var(--charcoal)", border: "2px solid rgba(255,255,255,.12)", borderRadius: 2, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 16, fontWeight: 900, marginBottom: 14 }}>

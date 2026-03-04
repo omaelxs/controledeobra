@@ -99,11 +99,19 @@ export interface NCFormData {
 // ── Responsáveis ────────────────────────────────────────────────
 export type RtTipo = "rt" | "eng" | "mestre" | "arquiteto" | "fiscal" | "outro";
 
+export const CARGO_LABELS: Record<RtTipo, string> = {
+  rt: "Responsável Técnico",
+  eng: "Engenheiro",
+  mestre: "Mestre de Obra",
+  arquiteto: "Arquiteto",
+  fiscal: "Fiscal",
+  outro: "Outro",
+};
+
 export interface Responsavel {
   id?: string;
   nome: string;
-  cargo: string;
-  tipo: RtTipo;
+  cargo: RtTipo;
   crea?: string;
   tel?: string;
   email?: string;
@@ -113,8 +121,7 @@ export interface Responsavel {
 
 export interface ResponsavelFormData {
   nome: string;
-  cargo: string;
-  tipo: RtTipo;
+  cargo: RtTipo;
   crea?: string;
   tel?: string;
   email?: string;

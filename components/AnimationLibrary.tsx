@@ -79,9 +79,13 @@ export function FeedbackAnimation({ type, children }: FeedbackAnimationProps) {
 /**
  * Button with Micro Interactions
  */
-interface AnimatedButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
+interface AnimatedButtonProps {
   variant?: "primary" | "secondary" | "ghost";
   children: React.ReactNode;
+  onClick?: () => void;
+  disabled?: boolean;
+  className?: string;
+  style?: React.CSSProperties;
 }
 
 export function AnimatedButton({

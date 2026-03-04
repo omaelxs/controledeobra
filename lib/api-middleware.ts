@@ -3,21 +3,35 @@
  * Valida tokens Firebase e permissões em TODOS endpoints críticos
  */
 
-import { Request } from "next/server";
+
 import { getAuth } from "firebase-admin/auth";
 import { getFirestore } from "firebase-admin/firestore";
 import { initializeApp, cert, getApps } from "firebase-admin/app";
 import { UserRole } from "@/types/user";
 
-// Inicializar Firebase Admin apenas uma vez
-const apps = getApps();
-const app = apps.length === 0 ? initializeApp({
-  credential: cert({
-    projectId: process.env.FIREBASE_PROJECT_ID,
-    clientEmail: process.env.FIREBASE_CLIENT_EMAIL,
-    privateKey: process.env.FIREBASE_PRIVATE_KEY?.replace(/\\n/g, '\n'),
-  } as any),
-}) : apps[0];
+// Inicializar Firebase Admin apenas uma vez (graceful se env vars ausentes)
+function getAdminApp() {
+  const apps = getApps();
+  if (apps.length > 0) return apps[0];
+
+  const projectId = process.env.FIREBASE_PROJECT_ID;
+  const clientEmail = process.env.FIREBASE_CLIENT_EMAIL;
+  const privateKey = process.env.FIREBASE_PRIVATE_KEY;
+
+  if (!projectId || !clientEmail || !privateKey) {
+    return null;
+  }
+
+  return initializeApp({
+    credential: cert({
+      projectId,
+      clientEmail,
+      privateKey: privateKey.replace(/\\n/g, '\n'),
+    } as any),
+  });
+}
+
+const app = getAdminApp();
 
 export interface AuthenticatedRequest extends Request {
   userId?: string;
@@ -43,6 +57,7 @@ export async function verifyToken(req: Request): Promise<{
   const token = authHeader.substring(7);
 
   try {
+    if (!app) throw new Error("Firebase Admin não configurado");
     const decodedToken = await getAuth(app).verifyIdToken(token);
     const userId = decodedToken.uid;
     const userEmail = decodedToken.email || "";
