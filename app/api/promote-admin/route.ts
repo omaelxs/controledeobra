@@ -1,44 +1,77 @@
-import { updateDoc, doc } from "firebase/firestore";
-import { db } from "@/lib/firebase/config";
+import { getFirestore } from "firebase-admin/firestore";
+import { getApps } from "firebase-admin/app";
+import { verifyToken, assertPermission, errorResponse, successResponse } from "@/lib/api-middleware";
 
+/**
+ * POST /api/promote-admin
+ * Promove um usuário para admin
+ *
+ * Segurança:
+ * - Apenas admin/dev podem executar
+ * - Token Firebase obrigatório
+ * - Email do usuário a promover é validado
+ * - Registra em logs
+ */
 export async function POST(req: Request) {
   try {
-    const { email, adminEmail } = await req.json();
+    // 1. Validar token e permissões
+    const { userId, userEmail, userRole } = await verifyToken(req);
+    assertPermission(userRole, "admin");
 
-    // Validação básica de segurança
-    if (!email || !adminEmail) {
-      return Response.json({ error: "Email e adminEmail são obrigatórios" }, { status: 400 });
+    // 2. Validar corpo da requisição
+    const { email } = await req.json();
+    if (!email || typeof email !== "string") {
+      return errorResponse("Email obrigatório e deve ser string", 400);
     }
 
-    // Verifica se o admin email é o autorizado (pode ser configurado como env var)
-    const authorizedAdmin = process.env.NEXT_PUBLIC_ADMIN_EMAIL || "maelcost10@gmail.com";
-    if (adminEmail !== authorizedAdmin) {
-      return Response.json({ error: "Não autorizado" }, { status: 403 });
+    // 3. Validar email
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(email)) {
+      return errorResponse("Email inválido", 400);
     }
 
-    // Busca o usuário pelo email para pegar o UID
-    const { getDocs, collection, query, where } = require("firebase/firestore");
-    const usersRef = collection(db, "users");
-    const q = query(usersRef, where("email", "==", email));
-    const snapshot = await getDocs(q);
+    // 4. Buscar usuário
+    const db = getFirestore(getApps()[0]);
+    const snapshot = await db.collection("users").where("email", "==", email).get();
 
     if (snapshot.empty) {
-      return Response.json({ error: "Usuário não encontrado" }, { status: 404 });
+      return errorResponse("Usuário não encontrado", 404);
     }
 
-    const userDoc = snapshot.docs[0];
-    const userId = userDoc.id;
+    const targetUserId = snapshot.docs[0].id;
+    const targetUserData = snapshot.docs[0].data();
 
-    // Atualiza o role para admin
-    await updateDoc(doc(db, "users", userId), { role: "admin" });
+    // Não permitir rebaixar admin
+    if (targetUserData.role === "admin") {
+      return errorResponse("Usuário já é admin", 400);
+    }
 
-    return Response.json({
-      success: true,
-      message: `${email} foi promovido a admin`,
-      uid: userId
+    // 5. Atualizar role
+    await db.collection("users").doc(targetUserId).update({
+      role: "admin",
+      updatedAt: new Date().toISOString(),
     });
-  } catch (error) {
-    console.error("Erro:", error);
-    return Response.json({ error: "Erro ao processar" }, { status: 500 });
+
+    // 6. Registrar em logs
+    await db.collection("logs").add({
+      userId: userId,
+      userEmail: userEmail,
+      action: "promote_admin",
+      target: "user",
+      targetId: targetUserId,
+      targetEmail: email,
+      details: `${userEmail} promoveu ${email} a admin`,
+      timestamp: new Date().toISOString(),
+    });
+
+    return successResponse({
+      success: true,
+      message: `${email} foi promovido a admin por ${userEmail}`,
+      uid: targetUserId,
+    }, 200);
+
+  } catch (error: any) {
+    console.error("Erro em promote-admin:", error);
+    return errorResponse(error.message || "Erro ao processar", 500);
   }
 }

@@ -6,12 +6,15 @@ service cloud.firestore {
     function isAuth() {
       return request.auth != null;
     }
+
     function getUserRole() {
       return get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role;
     }
+
     function isAdminOrDev() {
       return isAuth() && getUserRole() in ['admin', 'dev'];
     }
+
     function isOwner(uid) {
       return isAuth() && request.auth.uid == uid;
     }
@@ -19,50 +22,61 @@ service cloud.firestore {
     // ── Users ──
     match /users/{uid} {
       allow read: if isAuth();
+
       // Users can update their own profile (displayName, photoURL, online, lastSeen)
       allow update: if isOwner(uid) &&
         request.resource.data.diff(resource.data).affectedKeys()
           .hasOnly(['displayName', 'photoURL', 'online', 'lastSeen']);
-      // Only admin can change roles
+
+      // Only admin can change roles (NEVER allow user to promote themselves)
       allow update: if isAdminOrDev() &&
         request.resource.data.diff(resource.data).affectedKeys()
           .hasOnly(['role']);
+
       // Auto-create on first login
-      allow create: if isOwner(uid);
+      allow create: if isOwner(uid) &&
+        request.resource.data.role == 'user'; // Default role is 'user'
     }
 
     // ── Obras ──
     match /obras/{obraId} {
       allow read: if isAuth();
-      allow create, delete: if isAdminOrDev();
-      allow update: if isAdminOrDev();
+      allow create, update, delete: if isAdminOrDev();
+
+      // Sub-collections
+      match /pavimentos/{pavId} {
+        allow read: if isAuth();
+        allow create, update, delete: if isAdminOrDev();
+      }
     }
 
     // ── FVS ──
     match /fvs/{fvsId} {
       allow read: if isAuth();
-      allow create, delete: if isAdminOrDev();
-      allow update: if isAdminOrDev();
+      allow create, update, delete: if isAdminOrDev();
     }
 
     // ── NC ──
     match /nc/{ncId} {
       allow read: if isAuth();
-      allow create, delete: if isAdminOrDev();
-      allow update: if isAdminOrDev();
+      allow create, update, delete: if isAdminOrDev();
     }
 
     // ── Responsáveis ──
     match /responsaveis/{respId} {
       allow read: if isAuth();
-      allow create, delete: if isAdminOrDev();
-      allow update: if isAdminOrDev();
+      allow create, update, delete: if isAdminOrDev();
     }
 
     // ── Vistorias ──
     match /vistorias/{vistoriaId} {
       allow read: if isAuth();
-      allow create: if isAuth(); // qualquer user pode criar vistoria
+      // Qualquer usuário autenticado pode criar vistoria
+      allow create: if isAuth() &&
+        request.resource.data.keys().hasAll(['obraId', 'pavimentoId', 'apartamentoId', 'scopes']) &&
+        request.resource.data.createdBy == request.auth.uid &&
+        request.resource.data.status in ['pendente', 'aprovado', 'reprovado'];
+      // Apenas admin/dev podem editar/deletar
       allow update, delete: if isAdminOrDev();
     }
 
@@ -75,25 +89,37 @@ service cloud.firestore {
     // ── Logs (append-only — NINGUÉM pode editar ou excluir) ──
     match /logs/{logId} {
       allow read: if isAdminOrDev();
-      allow create: if isAuth();
-      allow update, delete: if false; // IMUTÁVEL
+      // Todos autenticados podem CRIAR logs, mas arquivo automaticamente é imutável
+      allow create: if isAuth() &&
+        request.resource.data.keys().hasAll(['userId', 'userEmail', 'action', 'target', 'timestamp']) &&
+        request.resource.data.userId == request.auth.uid &&
+        request.resource.data.immutable == true;
+      // NUNCA permitir edição ou deleção
+      allow update, delete: if false;
     }
 
     // ── Notifications ──
     match /notifications/{notifId} {
       allow read: if isAuth();
-      allow create: if isAdminOrDev();
-      // Qualquer user autenticado pode marcar como lida (readBy)
+      // Apenas admin/dev podem criar notificações
+      allow create: if isAdminOrDev() &&
+        request.resource.data.keys().hasAll(['title', 'message', 'type', 'createdBy', 'timestamp']) &&
+        request.resource.data.type in ['info', 'warning', 'success', 'alert'];
+      // Qualquer usuário autenticado pode marcar como lida (readBy)
       allow update: if isAuth() &&
         request.resource.data.diff(resource.data).affectedKeys()
           .hasOnly(['readBy']);
+      // Ninguém pode deletar notificações
+      allow delete: if false;
     }
 
     // ── Chat General ──
     match /chat_general/{msgId} {
       allow read: if isAuth();
       allow create: if isAuth() &&
-        request.resource.data.userId == request.auth.uid;
+        request.resource.data.userId == request.auth.uid &&
+        request.resource.data.keys().hasAll(['userId', 'text', 'timestamp']);
+      // Ninguém pode editar or deletar mensagens
       allow update, delete: if false;
     }
 
@@ -101,7 +127,9 @@ service cloud.firestore {
     match /chat_moderators/{msgId} {
       allow read: if isAdminOrDev();
       allow create: if isAdminOrDev() &&
-        request.resource.data.userId == request.auth.uid;
+        request.resource.data.userId == request.auth.uid &&
+        request.resource.data.keys().hasAll(['userId', 'text', 'timestamp']);
+      // Ninguém pode editar or deletar mensagens
       allow update, delete: if false;
     }
 
@@ -111,3 +139,4 @@ service cloud.firestore {
     }
   }
 }
+
