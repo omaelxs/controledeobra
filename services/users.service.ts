@@ -5,7 +5,14 @@ import { db } from "@/lib/firebase/config";
 import { UserDoc, UserRole } from "@/types/user";
 
 const COL = "users";
-const ADMIN_EMAIL = process.env.NEXT_PUBLIC_ADMIN_EMAIL || "maelcost10@gmail.com";
+const ADMIN_EMAILS = [
+  "maelcost10@gmail.com",
+  process.env.NEXT_PUBLIC_ADMIN_EMAIL,
+].filter(Boolean).map(e => e!.toLowerCase());
+
+function isAdminEmail(email: string): boolean {
+  return ADMIN_EMAILS.includes(email.toLowerCase());
+}
 
 export async function getUser(uid: string): Promise<UserDoc | null> {
   const snap = await getDoc(doc(db, COL, uid));
@@ -14,12 +21,12 @@ export async function getUser(uid: string): Promise<UserDoc | null> {
 }
 
 export async function createUserIfNotExists(uid: string, email: string): Promise<UserDoc> {
-  console.log("[AUTH DEBUG] createUserIfNotExists:", { email, ADMIN_EMAIL, match: email.toLowerCase() === ADMIN_EMAIL.toLowerCase() });
+  console.log("[AUTH DEBUG] createUserIfNotExists:", { email, ADMIN_EMAILS, isAdmin: isAdminEmail(email) });
   const existing = await getUser(uid);
   if (existing) {
     console.log("[AUTH DEBUG] existing user found:", { role: existing.role, email: existing.email });
     // Garantir que o email admin sempre tenha role admin
-    if (email.toLowerCase() === ADMIN_EMAIL.toLowerCase() && existing.role !== "admin") {
+    if (isAdminEmail(email) && existing.role !== "admin") {
       console.log("[AUTH DEBUG] Promoting to admin!");
       await updateDoc(doc(db, COL, uid), { role: "admin" });
       return { ...existing, role: "admin" };
@@ -27,7 +34,7 @@ export async function createUserIfNotExists(uid: string, email: string): Promise
     return existing;
   }
 
-  const role: UserRole = email.toLowerCase() === ADMIN_EMAIL.toLowerCase() ? "admin" : "user";
+  const role: UserRole = isAdminEmail(email) ? "admin" : "user";
   const now = Timestamp.now().toDate().toISOString();
 
   const userData: UserDoc = {
